@@ -15,10 +15,10 @@
 
 ## Documentation
 Detailed specifications can be found in the `/docs` directory:
-- [Data Models](/docs/DATA_MODELS.md) - Database schema and relationships
-- [Features](/docs/FEATURES.md) - Detailed feature specifications
-- [API](/docs/API.md) - API endpoints and usage
-- [UI/UX](/docs/UI_UX.md) - Design system and user flows
+- [Data Models](@data_models.md) - Database schema and relationships
+- [Features](@features.md) - Detailed feature specifications
+- [API](/docs/api.md) - API endpoints and usage
+- [UI/UX](@ui_ux.md) - Design system and user flows
 
 ## Tech Stack
 
@@ -37,8 +37,13 @@ Detailed specifications can be found in the `/docs` directory:
 - Vercel - Easy deployment for frontend
 - Supabase hosting (included) for backend
 
-## Getting Started
-[Installation and setup instructions here]
-
-## Contributing
-[Contributing guidelines here]
+## Issues
+- Add the ability to edit goals
+- Add ability to mark habits as complete for a given day
+- Add habit completion history view
+- Add weekly habit completion stats
+- Add habit reminders/notifications
+- Add habit categories and filtering
+- Add a "Lifetime" page to track your lifetime achievements
+- Make the Habits page functional (e.g., you can select which days you want to do a habit)
+- Make a Weekly Plan section to determine what your weekly goals are and how you're progressing toward them (need this both for current week and next week e.g., some kind of ability to set the next week's plan with changes from the current week's plan)
