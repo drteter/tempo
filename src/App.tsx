@@ -7,7 +7,6 @@ import QuarterlyBaseline from './pages/QuarterlyBaseline'
 import AnnualGoals from './pages/AnnualGoals'
 import LifetimeGoals from './pages/LifetimeGoals'
 import Settings from './pages/Settings'
-import GoalForm from './pages/GoalForm'
 import GoalDetail from './pages/GoalDetail'
 import { CategoryProvider } from './contexts/CategoryContext'
 import { GoalProvider } from './contexts/GoalContext'
@@ -28,7 +27,6 @@ function App() {
                 <Route path="/annual" element={<AnnualGoals />} />
                 <Route path="/lifetime" element={<LifetimeGoals />} />
                 <Route path="/settings" element={<Settings />} />
-                <Route path="/goals/new" element={<GoalForm />} />
                 <Route path="/goals/:id" element={<GoalDetail />} />
               </Routes>
             </main>

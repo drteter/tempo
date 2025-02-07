@@ -9,25 +9,21 @@ export type Goal = {
   status: 'not_started' | 'in_progress' | 'completed' | 'archived'
   category: string
   timeHorizon: TimeHorizon
+  daysPerWeek?: number
   tracking: {
-    startDate?: string // ISO date string
-    endDate?: string // ISO date string for weekly/quarterly/annual goals
+    scheduledDays: number[]
+    completedDates: string[]
     target?: {
       value: number
       unit: string
     }
-    progress?: number // 0-100 for percentage goals, or actual value for countable goals
+    progress?: number
     checkpoints?: {
       id: string
       title: string
       completed: boolean
-      dueDate?: string // ISO date string
+      dueDate?: string
     }[]
-    routineConfig?: { // For weekly goals that are routine-based
-      frequency: 'daily' | 'weekly'
-      scheduledDays: number[] // 0-6 for days of week
-      completedDates: string[] // ISO date strings
-    }
   }
 }
 
@@ -38,6 +34,7 @@ type GoalContextType = {
   deleteGoal: (id: string) => void
   getGoalsByTimeHorizon: (timeHorizon: TimeHorizon) => Goal[]
   toggleRoutineCompletion: (goalId: string, date: string) => void
+  updateScheduledDays: (goalId: string, days: number[]) => void
 }
 
 const GoalContext = createContext<GoalContextType | undefined>(undefined)
@@ -52,8 +49,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       category: 'Health',
       timeHorizon: 'annual',
       tracking: {
-        startDate: '2024-01-01',
-        endDate: '2024-12-31',
+        scheduledDays: [],
+        completedDates: [],
         checkpoints: [
           {
             id: '1',
@@ -77,12 +74,10 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       status: 'in_progress',
       category: 'Learning',
       timeHorizon: 'weekly',
+      daysPerWeek: 5,
       tracking: {
-        routineConfig: {
-          frequency: 'daily',
-          scheduledDays: [0, 1, 2, 3, 4, 5, 6],
-          completedDates: []
-        }
+        scheduledDays: [1, 2, 3, 4, 5], // Mon-Fri
+        completedDates: []
       }
     }
   ])
@@ -91,9 +86,30 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     const goal: Goal = {
       ...newGoal,
       id: Math.random().toString(36).substr(2, 9),
-      status: 'not_started'
+      status: 'not_started',
+      tracking: {
+        ...newGoal.tracking,
+        scheduledDays: newGoal.tracking.scheduledDays || [],
+        completedDates: []
+      }
     }
     setGoals(current => [...current, goal])
+  }
+
+  const updateScheduledDays = (goalId: string, days: number[]) => {
+    setGoals(current =>
+      current.map(goal =>
+        goal.id === goalId
+          ? {
+              ...goal,
+              tracking: {
+                ...goal.tracking,
+                scheduledDays: days
+              }
+            }
+          : goal
+      )
+    )
   }
 
   const updateGoal = (updatedGoal: Goal) => {
@@ -113,19 +129,16 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   const toggleRoutineCompletion = (goalId: string, date: string) => {
     setGoals(current =>
       current.map(goal => {
-        if (goal.id === goalId && goal.tracking.routineConfig) {
-          const completedDates = goal.tracking.routineConfig.completedDates
+        if (goal.id === goalId && goal.tracking.scheduledDays.length > 0) {
+          const completedDates = goal.tracking.completedDates
           const isCompleted = completedDates.includes(date)
           return {
             ...goal,
             tracking: {
               ...goal.tracking,
-              routineConfig: {
-                ...goal.tracking.routineConfig,
-                completedDates: isCompleted
-                  ? completedDates.filter(d => d !== date)
-                  : [...completedDates, date]
-              }
+              completedDates: isCompleted
+                ? completedDates.filter(d => d !== date)
+                : [...completedDates, date]
             }
           }
         }
@@ -142,7 +155,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         updateGoal, 
         deleteGoal, 
         getGoalsByTimeHorizon,
-        toggleRoutineCompletion 
+        toggleRoutineCompletion,
+        updateScheduledDays
       }}
     >
       {children}

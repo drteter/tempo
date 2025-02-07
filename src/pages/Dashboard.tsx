@@ -50,20 +50,68 @@ function HabitItem({ habit }: { habit: Habit }) {
   )
 }
 
+function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, date: string) => void }) {
+  const today = new Date()
+  const todayString = today.toISOString().split('T')[0]
+
+  return (
+    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+      <div>
+        <h3 className="font-medium">{goal.title}</h3>
+        <p className="text-sm text-text-secondary">{goal.description}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary">
+          {goal.category}
+        </span>
+        <button
+          onClick={() => onComplete(goal.id, todayString)}
+          className={`p-1 rounded-full ${
+            goal.isCompleted
+              ? 'bg-success/10 text-success'
+              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+          }`}
+        >
+          <CheckCircleIcon className="h-6 w-6" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function Dashboard() {
-  const { goals } = useGoals()
+  const { goals, toggleRoutineCompletion } = useGoals()
   const { habits } = useHabits()
   
   // Calculate real statistics
   const activeGoals = goals.filter(goal => goal.status === 'in_progress').length
   const completedGoals = goals.filter(goal => goal.status === 'completed').length
   
-  // Get today's habits based on scheduled days
-  const todaysHabits = habits.filter(habit => {
+  // Get today's habits and weekly goals based on scheduled days
+  const todaysActivities = () => {
     const today = new Date()
     const dayOfWeek = today.getDay()
-    return habit.scheduledDays.includes(dayOfWeek)
-  })
+    const todayKey = today.toISOString().split('T')[0]
+
+    const todaysHabits = habits.filter(habit => 
+      habit.scheduledDays.includes(dayOfWeek)
+    )
+
+    const todaysGoals = goals.filter(goal => 
+      goal.timeHorizon === 'weekly' && 
+      goal.tracking.scheduledDays.includes(dayOfWeek)
+    )
+
+    return {
+      habits: todaysHabits,
+      goals: todaysGoals.map(goal => ({
+        ...goal,
+        isCompleted: goal.tracking.completedDates.includes(todayKey)
+      }))
+    }
+  }
+
+  const { habits: todaysHabits, goals: todaysGoals } = todaysActivities()
   
   // Calculate weekly progress (example metric)
   const calculateWeeklyProgress = () => {
@@ -99,14 +147,23 @@ function Dashboard() {
       </div>
       
       <div className="card">
-        <h2 className="text-lg font-semibold mb-4">Today's Habits</h2>
+        <h2 className="text-lg font-semibold mb-4">Today's Activities</h2>
         <div className="space-y-4">
-          {todaysHabits.length > 0 ? (
-            todaysHabits.map(habit => (
-              <HabitItem key={habit.id} habit={habit} />
-            ))
+          {todaysHabits.length > 0 || todaysGoals.length > 0 ? (
+            <>
+              {todaysHabits.map(habit => (
+                <HabitItem key={habit.id} habit={habit} />
+              ))}
+              {todaysGoals.map(goal => (
+                <GoalItem 
+                  key={goal.id} 
+                  goal={goal} 
+                  onComplete={toggleRoutineCompletion}
+                />
+              ))}
+            </>
           ) : (
-            <p className="text-text-secondary">No habits scheduled for today.</p>
+            <p className="text-text-secondary">No activities scheduled for today.</p>
           )}
         </div>
       </div>

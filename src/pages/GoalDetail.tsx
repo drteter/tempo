@@ -46,15 +46,9 @@ export default function GoalDetail() {
             <p className="text-text-secondary">Category: {goal.category}</p>
             <p className="text-text-secondary">Time Horizon: {goal.timeHorizon}</p>
 
-            {goal.tracking.startDate && (
+            {goal.timeHorizon === 'weekly' && (
               <p className="text-text-secondary">
-                Start Date: {new Date(goal.tracking.startDate).toLocaleDateString()}
-              </p>
-            )}
-
-            {goal.tracking.endDate && (
-              <p className="text-text-secondary">
-                End Date: {new Date(goal.tracking.endDate).toLocaleDateString()}
+                Days per Week: {goal.daysPerWeek}
               </p>
             )}
 
@@ -68,17 +62,12 @@ export default function GoalDetail() {
               <p className="text-text-secondary">Progress: {goal.tracking.progress}%</p>
             )}
 
-            {goal.tracking.routineConfig && (
-              <>
-                <p className="text-text-secondary">
-                  Frequency: {goal.tracking.routineConfig.frequency}
-                </p>
-                <p className="text-text-secondary">
-                  Scheduled Days: {goal.tracking.routineConfig.scheduledDays.map(day => 
-                    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
-                  ).join(', ')}
-                </p>
-              </>
+            {goal.timeHorizon === 'weekly' && (
+              <p className="text-text-secondary">
+                Scheduled Days: {goal.tracking.scheduledDays.map(day => 
+                  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
+                ).join(', ')}
+              </p>
             )}
 
             {goal.tracking.checkpoints && goal.tracking.checkpoints.length > 0 && (
