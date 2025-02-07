@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from 'react'
+import { startOfWeek, subWeeks } from 'date-fns'
 
 export type TimeHorizon = 'weekly' | 'quarterly' | 'annual' | 'lifetime'
 
@@ -27,6 +28,13 @@ export type Goal = {
   }
 }
 
+export type WeeklySchedule = {
+  weekStartDate: string  // ISO date string of week start
+  scheduledDays: {
+    [goalId: string]: number[]  // Maps goal IDs to their scheduled days
+  }
+}
+
 type GoalContextType = {
   goals: Goal[]
   addGoal: (goal: Omit<Goal, 'id' | 'status'>) => void
@@ -35,6 +43,9 @@ type GoalContextType = {
   getGoalsByTimeHorizon: (timeHorizon: TimeHorizon) => Goal[]
   toggleRoutineCompletion: (goalId: string, date: string) => void
   updateScheduledDays: (goalId: string, days: number[]) => void
+  weeklySchedules: WeeklySchedule[]
+  setWeekSchedule: (weekStartDate: string, goalId: string, days: number[]) => void
+  processWeekTransition: () => void  // Called on app load to handle week transitions
 }
 
 const GoalContext = createContext<GoalContextType | undefined>(undefined)
@@ -81,6 +92,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
       }
     }
   ])
+  const [weeklySchedules, setWeeklySchedules] = useState<WeeklySchedule[]>([])
 
   const addGoal = (newGoal: Omit<Goal, 'id' | 'status'>) => {
     const goal: Goal = {
@@ -147,6 +159,40 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     )
   }
 
+  const processWeekTransition = () => {
+    const today = new Date()
+    const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 }).toISOString().split('T')[0]
+    const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+
+    const thisWeekSchedule = weeklySchedules.find(s => s.weekStartDate === thisWeekStart)
+    if (thisWeekSchedule) {
+      setWeeklySchedules(current => [
+        ...current.filter(s => s.weekStartDate !== lastWeekStart),
+        { weekStartDate: lastWeekStart, scheduledDays: thisWeekSchedule.scheduledDays }
+      ])
+    }
+  }
+
+  const setWeekSchedule = (weekStartDate: string, goalId: string, days: number[]) => {
+    setWeeklySchedules(current => {
+      const existingSchedule = current.find(s => s.weekStartDate === weekStartDate)
+      if (existingSchedule) {
+        return current.map(schedule => 
+          schedule.weekStartDate === weekStartDate
+            ? {
+                ...schedule,
+                scheduledDays: { ...schedule.scheduledDays, [goalId]: days }
+              }
+            : schedule
+        )
+      }
+      return [...current, {
+        weekStartDate,
+        scheduledDays: { [goalId]: days }
+      }]
+    })
+  }
+
   return (
     <GoalContext.Provider 
       value={{ 
@@ -156,7 +202,10 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         deleteGoal, 
         getGoalsByTimeHorizon,
         toggleRoutineCompletion,
-        updateScheduledDays
+        updateScheduledDays,
+        weeklySchedules,
+        setWeekSchedule,
+        processWeekTransition
       }}
     >
       {children}

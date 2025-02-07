@@ -1,12 +1,20 @@
 import { CalendarIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
-import { useGoals, type Goal } from '../contexts/GoalContext'
+import { useGoals, type Goal, type WeeklySchedule } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
-import { useState } from 'react'
-import { format, startOfWeek, addDays } from 'date-fns'
+import { useState, useEffect } from 'react'
+import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameWeek } from 'date-fns'
 import ScheduleGoalsModal, { WEEKDAYS } from '../components/ScheduleGoalsModal'
+import WeekSelector from '../components/WeekSelector'
 
 export default function WeeklyPlan() {
-  const { goals, updateScheduledDays, toggleRoutineCompletion } = useGoals()
+  const { 
+    goals, 
+    updateScheduledDays, 
+    toggleRoutineCompletion, 
+    processWeekTransition,
+    weeklySchedules,
+    setWeekSchedule
+  } = useGoals()
   const { categories } = useCategories()
   const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
   const today = new Date()
@@ -14,6 +22,30 @@ export default function WeeklyPlan() {
   const weekStart = startOfWeek(today)
   const [selectedDay, setSelectedDay] = useState<{ index: number, date: Date } | null>(null)
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
+  const [selectedDate, setSelectedDate] = useState(today)
+
+  // Determine which week we're viewing
+  const isLastWeek = isSameWeek(selectedDate, subWeeks(today, 1))
+  const isThisWeek = isSameWeek(selectedDate, today)
+  const isNextWeek = isSameWeek(selectedDate, addWeeks(today, 1))
+  
+  // Disable editing for last week
+  const isReadOnly = isLastWeek
+
+  useEffect(() => {
+    const checkWeekTransition = () => {
+      const lastCheck = localStorage.getItem('lastWeekCheck')
+      const today = new Date()
+      const thisMonday = startOfWeek(today, { weekStartsOn: 1 })
+      
+      if (!lastCheck || new Date(lastCheck) < thisMonday) {
+        processWeekTransition()
+        localStorage.setItem('lastWeekCheck', today.toISOString())
+      }
+    }
+    
+    checkWeekTransition()
+  }, [processWeekTransition])
 
   const getSchedulingStatus = (goal: Goal) => {
     const scheduledCount = goal.tracking.scheduledDays.length
@@ -27,35 +59,88 @@ export default function WeeklyPlan() {
     }
   }
 
+  const getWeekSchedule = () => {
+    // For last week, return empty schedule
+    if (isLastWeek) {
+      return weeklyGoals.map(goal => ({
+        ...goal,
+        tracking: {
+          ...goal.tracking,
+          scheduledDays: []
+        }
+      }))
+    }
+
+    // For next week, get from weeklySchedules if exists
+    if (isNextWeek) {
+      const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+      const nextWeekSchedule = weeklySchedules.find((schedule: WeeklySchedule) => 
+        schedule.weekStartDate === nextWeekStart
+      )
+      
+      return weeklyGoals.map(goal => ({
+        ...goal,
+        tracking: {
+          ...goal.tracking,
+          scheduledDays: nextWeekSchedule?.scheduledDays[goal.id] || []
+        }
+      }))
+    }
+
+    // For current week (isThisWeek), use actual goal schedules
+    if (isThisWeek) {
+      return weeklyGoals
+    }
+
+    // For any other week, return empty schedules
+    return weeklyGoals.map(goal => ({
+      ...goal,
+      tracking: {
+        ...goal.tracking,
+        scheduledDays: []
+      }
+    }))
+  }
+
+  // Replace the existing weeklyGoals usage with filtered version
+  const filteredWeeklyGoals = getWeekSchedule()
+
   const getDaySchedule = (dayIndex: number) => {
-    return weeklyGoals.filter(goal => 
+    return filteredWeeklyGoals.filter(goal => 
       goal.tracking.scheduledDays.includes(dayIndex)
     )
   }
 
   const handleDragStart = (e: React.DragEvent, goalId: string) => {
+    if (isReadOnly) return
     e.dataTransfer.setData('goalId', goalId)
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
   }
 
   const handleDrop = (e: React.DragEvent, dayValue: number) => {
     e.preventDefault()
+    if (isReadOnly) return
+
     const goalId = e.dataTransfer.getData('goalId')
-    const goal = weeklyGoals.find(g => g.id === goalId)
+    const goal = filteredWeeklyGoals.find(g => g.id === goalId)
     if (!goal) return
 
-    const currentDays = goal.tracking.scheduledDays
-    if (!currentDays.includes(dayValue)) {
-      const newDays = [...currentDays, dayValue].sort()
-      updateScheduledDays(goalId, newDays)
+    if (isNextWeek) {
+      // Store in next week's schedule
+      const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+      setWeekSchedule(nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue].sort())
+    } else {
+      // Update current week's schedule
+      const currentDays = goal.tracking.scheduledDays
+      if (!currentDays.includes(dayValue)) {
+        const newDays = [...currentDays, dayValue].sort()
+        updateScheduledDays(goalId, newDays)
+      }
     }
   }
 
   const handleRemoveFromDay = (goalId: string, dayValue: number) => {
-    const goal = weeklyGoals.find(g => g.id === goalId)
+    if (isReadOnly) return
+    const goal = filteredWeeklyGoals.find(g => g.id === goalId)
     if (!goal) return
 
     const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)
@@ -71,7 +156,7 @@ export default function WeeklyPlan() {
   }
 
   const areAllGoalsScheduled = () => {
-    return weeklyGoals.every(goal => {
+    return filteredWeeklyGoals.every(goal => {
       const { scheduledCount, targetCount } = getSchedulingStatus(goal)
       return scheduledCount >= targetCount
     })
@@ -79,7 +164,7 @@ export default function WeeklyPlan() {
 
   return (
     <div className="space-y-8">
-      {areAllGoalsScheduled() && weeklyGoals.length > 0 && (
+      {areAllGoalsScheduled() && filteredWeeklyGoals.length > 0 && (
         <div className="flex justify-center w-full">
           <div className="flex items-center gap-3 bg-[#10B981] text-white px-6 py-3 rounded-lg shadow-sm">
             <div className="flex items-center justify-center w-8 h-8 bg-white rounded-full">
@@ -95,7 +180,7 @@ export default function WeeklyPlan() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
             <CalendarIcon className="h-6 w-6 text-primary" />
@@ -105,25 +190,40 @@ export default function WeeklyPlan() {
             <p className="text-text-secondary">Plan and track your weekly activities</p>
           </div>
         </div>
-        <button
-          onClick={() => setViewType(prev => prev === 'grid' ? 'list' : 'grid')}
-          className="p-2 rounded-lg hover:bg-gray-100"
-          title={viewType === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-        >
-          {viewType === 'grid' ? (
-            <Bars4Icon className="h-6 w-6 text-gray-600" />
-          ) : (
-            <TableCellsIcon className="h-6 w-6 text-gray-600" />
-          )}
-        </button>
+        
+        <div className="flex items-center gap-4">
+          <WeekSelector 
+            selectedDate={selectedDate}
+            onChange={setSelectedDate}
+          />
+          <button
+            onClick={() => setViewType(prev => prev === 'grid' ? 'list' : 'grid')}
+            className="p-2 rounded-lg hover:bg-gray-100"
+            title={viewType === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+          >
+            {viewType === 'grid' ? (
+              <Bars4Icon className="h-6 w-6 text-gray-600" />
+            ) : (
+              <TableCellsIcon className="h-6 w-6 text-gray-600" />
+            )}
+          </button>
+        </div>
       </div>
+
+      {isNextWeek && (
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <p className="text-blue-700">
+            Planning mode: Changes made here will take effect next week
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6">
         {/* Weekly Goals Section */}
         <div className="card">
           <h2 className="text-lg font-semibold mb-4">Goals for the Week</h2>
           <div className="space-y-4">
-            {weeklyGoals.map(goal => {
+            {filteredWeeklyGoals.map(goal => {
               const { scheduledCount, targetCount, isOnTrack } = getSchedulingStatus(goal)
               const categoryIcon = getCategoryIcon(goal.category)
               
@@ -173,27 +273,20 @@ export default function WeeklyPlan() {
           <div className={viewType === 'grid' ? 'grid grid-cols-7 gap-4' : 'space-y-6'}>
             {WEEKDAYS.map(day => {
               const dayDate = addDays(weekStart, day.value)
-              const isToday = format(dayDate, 'yyyy-MM-dd') === todayKey
               const scheduledGoals = getDaySchedule(day.value)
 
               return (
                 <div 
                   key={day.value}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, day.value)}
-                  className={`${
-                    viewType === 'grid' 
-                      ? 'p-3 min-h-[200px]' 
-                      : 'p-4'
-                  } rounded-lg ${
-                    isToday 
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => handleDrop(e, day.value)}
+                  className={`p-4 rounded-lg ${
+                    format(dayDate, 'yyyy-MM-dd') === todayKey
                       ? 'bg-primary/5' 
                       : 'border-2 border-dashed border-gray-200'
                   }`}
                 >
-                  <h3 className={`font-medium mb-3 ${viewType === 'grid' ? 'text-center' : ''}`}>
-                    {day.label}
-                  </h3>
+                  <h3 className="font-medium mb-3 text-center">{day.label}</h3>
                   {scheduledGoals.length > 0 ? (
                     <div className="space-y-2">
                       {scheduledGoals.map(goal => {
@@ -203,11 +296,11 @@ export default function WeeklyPlan() {
                         return (
                           <div 
                             key={goal.id} 
-                            className={`flex items-center justify-between gap-2 p-2 rounded-lg transition-colors ${
+                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
                               isCompleted 
                                 ? 'bg-[#10B981] text-white' 
                                 : 'bg-white shadow-sm'
-                            } ${viewType === 'grid' ? 'text-sm' : ''}`}
+                            }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               {categoryIcon && (
@@ -218,34 +311,34 @@ export default function WeeklyPlan() {
                                   style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                                 >
                                   <categoryIcon.Icon 
-                                    className={`${viewType === 'grid' ? 'h-4 w-4' : 'h-5 w-5'}`}
+                                    className="h-4 w-4"
                                     style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                   />
                                 </div>
                               )}
-                              <span className="truncate">{goal.title}</span>
+                              <span className="truncate text-sm">{goal.title}</span>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
                               <button
                                 onClick={() => toggleRoutineCompletion(goal.id, format(dayDate, 'yyyy-MM-dd'))}
-                                className={`flex items-center justify-center ${viewType === 'grid' ? 'w-6 h-6' : 'w-8 h-8'} rounded-full ${
+                                className={`flex items-center justify-center w-6 h-6 rounded-full ${
                                   isCompleted
                                     ? 'bg-white'
                                     : 'bg-gray-100 hover:bg-gray-200'
                                 }`}
                               >
                                 {isCompleted ? (
-                                  <svg className={`${viewType === 'grid' ? 'w-4 h-4' : 'w-5 h-5'} text-[#10B981]`} viewBox="0 0 24 24">
+                                  <svg className="w-4 h-4 text-[#10B981]" viewBox="0 0 24 24">
                                     <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                                   </svg>
                                 ) : (
-                                  <div className={`${viewType === 'grid' ? 'w-4 h-4' : 'w-5 h-5'} rounded-full border-2 border-gray-300`} />
+                                  <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                                 )}
                               </button>
                               <button
                                 onClick={() => handleRemoveFromDay(goal.id, day.value)}
-                                className={`text-gray-400 hover:text-gray-600 flex-shrink-0 ${
-                                  isCompleted ? 'text-white/60 hover:text-white' : ''
+                                className={`text-sm ${
+                                  isCompleted ? 'text-white/60 hover:text-white' : 'text-gray-400 hover:text-gray-600'
                                 }`}
                               >
                                 ×
