@@ -1,4 +1,4 @@
-import { CalendarIcon, CheckCircleIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
+import { CalendarIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
 import { useGoals, type Goal } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState } from 'react'
@@ -70,8 +70,31 @@ export default function WeeklyPlan() {
     } : null
   }
 
+  const areAllGoalsScheduled = () => {
+    return weeklyGoals.every(goal => {
+      const { scheduledCount, targetCount } = getSchedulingStatus(goal)
+      return scheduledCount >= targetCount
+    })
+  }
+
   return (
     <div className="space-y-8">
+      {areAllGoalsScheduled() && weeklyGoals.length > 0 && (
+        <div className="flex justify-center w-full">
+          <div className="flex items-center gap-3 bg-[#10B981] text-white px-6 py-3 rounded-lg shadow-sm">
+            <div className="flex items-center justify-center w-8 h-8 bg-white rounded-full">
+              <svg className="w-6 h-6 text-[#10B981]" viewBox="0 0 24 24">
+                <path 
+                  fill="currentColor" 
+                  d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" 
+                />
+              </svg>
+            </div>
+            <span className="font-bold text-lg">YOU'RE ON THE RIGHT FUCKING TRACK</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -173,32 +196,64 @@ export default function WeeklyPlan() {
                   </h3>
                   {scheduledGoals.length > 0 ? (
                     <div className="space-y-2">
-                      {scheduledGoals.map(goal => (
-                        <div 
-                          key={goal.id} 
-                          className={`flex items-center justify-between gap-1 p-2 bg-white rounded shadow-sm ${
-                            viewType === 'grid' ? 'text-sm' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-1 min-w-0">
-                            <CheckCircleIcon 
-                              className={`${viewType === 'grid' ? 'h-4 w-4' : 'h-5 w-5'} flex-shrink-0 cursor-pointer ${
-                                goal.tracking.completedDates.includes(format(dayDate, 'yyyy-MM-dd'))
-                                  ? 'text-green-500'
-                                  : 'text-gray-300 hover:text-gray-400'
-                              }`}
-                              onClick={() => toggleRoutineCompletion(goal.id, format(dayDate, 'yyyy-MM-dd'))}
-                            />
-                            <span className="truncate">{goal.title}</span>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveFromDay(goal.id, day.value)}
-                            className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                      {scheduledGoals.map(goal => {
+                        const isCompleted = goal.tracking.completedDates.includes(format(dayDate, 'yyyy-MM-dd'))
+                        const categoryIcon = getCategoryIcon(goal.category)
+                        
+                        return (
+                          <div 
+                            key={goal.id} 
+                            className={`flex items-center justify-between gap-2 p-2 rounded-lg transition-colors ${
+                              isCompleted 
+                                ? 'bg-[#10B981] text-white' 
+                                : 'bg-white shadow-sm'
+                            } ${viewType === 'grid' ? 'text-sm' : ''}`}
                           >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {categoryIcon && (
+                                <div 
+                                  className={`p-1 rounded-lg ${
+                                    isCompleted ? 'bg-white/20' : ''
+                                  }`}
+                                  style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
+                                >
+                                  <categoryIcon.Icon 
+                                    className={`${viewType === 'grid' ? 'h-4 w-4' : 'h-5 w-5'}`}
+                                    style={{ color: isCompleted ? 'white' : categoryIcon.color }}
+                                  />
+                                </div>
+                              )}
+                              <span className="truncate">{goal.title}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleRoutineCompletion(goal.id, format(dayDate, 'yyyy-MM-dd'))}
+                                className={`flex items-center justify-center ${viewType === 'grid' ? 'w-6 h-6' : 'w-8 h-8'} rounded-full ${
+                                  isCompleted
+                                    ? 'bg-white'
+                                    : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <svg className={`${viewType === 'grid' ? 'w-4 h-4' : 'w-5 h-5'} text-[#10B981]`} viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                  </svg>
+                                ) : (
+                                  <div className={`${viewType === 'grid' ? 'w-4 h-4' : 'w-5 h-5'} rounded-full border-2 border-gray-300`} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleRemoveFromDay(goal.id, day.value)}
+                                className={`text-gray-400 hover:text-gray-600 flex-shrink-0 ${
+                                  isCompleted ? 'text-white/60 hover:text-white' : ''
+                                }`}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   ) : (
                     <p className="text-sm text-text-secondary text-center py-4">

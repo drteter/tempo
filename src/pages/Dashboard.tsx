@@ -1,7 +1,18 @@
 import { ChartBarIcon, CheckCircleIcon, FlagIcon } from '@heroicons/react/24/outline'
 import { useGoals } from '../contexts/GoalContext'
 import { useHabits } from '../contexts/HabitContext'
+import { useCategories } from '../contexts/CategoryContext'
 import type { Habit } from '../contexts/HabitContext'
+
+// Add getCategoryIcon function
+const getCategoryIcon = (categoryName: string) => {
+  const { categories } = useCategories()
+  const category = categories.find(c => c.name === categoryName)
+  return category ? {
+    Icon: category.icon,
+    color: category.color
+  } : null
+}
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
@@ -26,24 +37,42 @@ function HabitItem({ habit }: { habit: Habit }) {
   const isCompletedToday = habit.completedDates.includes(todayString)
 
   return (
-    <div className="flex items-center justify-between">
+    <div className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+      isCompletedToday 
+        ? 'bg-[#10B981] text-white' 
+        : 'hover:bg-gray-50'
+    }`}>
       <div>
-        <h3 className="font-medium text-text-primary">{habit.title}</h3>
-        <p className="text-sm text-text-secondary">{habit.description}</p>
+        <h3 className={`font-medium ${isCompletedToday ? 'text-white' : 'text-text-primary'}`}>
+          {habit.title}
+        </h3>
+        <p className={`text-sm ${isCompletedToday ? 'text-white/80' : 'text-text-secondary'}`}>
+          {habit.description}
+        </p>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary">
+        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+          isCompletedToday 
+            ? 'bg-white/20 text-white' 
+            : 'bg-primary/10 text-primary'
+        }`}>
           {habit.category}
         </span>
         <button
           onClick={() => toggleHabitCompletion(habit.id, todayString)}
-          className={`p-1 rounded-full ${
-            isCompletedToday 
-              ? 'bg-success/10 text-success' 
-              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+          className={`flex items-center justify-center w-8 h-8 rounded-full ${
+            isCompletedToday
+              ? 'bg-white'
+              : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >
-          <CheckCircleIcon className="h-6 w-6" />
+          {isCompletedToday ? (
+            <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+            </svg>
+          ) : (
+            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+          )}
         </button>
       </div>
     </div>
@@ -53,26 +82,62 @@ function HabitItem({ habit }: { habit: Habit }) {
 function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, date: string) => void }) {
   const today = new Date()
   const todayString = today.toISOString().split('T')[0]
+  const categoryIcon = getCategoryIcon(goal.category)
 
   return (
-    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
-      <div>
-        <h3 className="font-medium">{goal.title}</h3>
-        <p className="text-sm text-text-secondary">{goal.description}</p>
+    <div className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+      goal.isCompleted 
+        ? 'bg-[#10B981] text-white' 
+        : 'hover:bg-gray-50'
+    }`}>
+      <div className="flex items-center gap-4">
+        {categoryIcon && (
+          <div 
+            className={`p-2 rounded-lg ${
+              goal.isCompleted 
+                ? 'bg-white/20' 
+                : ''
+            }`}
+            style={{ backgroundColor: goal.isCompleted ? undefined : `${categoryIcon.color}20` }}
+          >
+            <categoryIcon.Icon 
+              className="h-5 w-5"
+              style={{ color: goal.isCompleted ? 'white' : categoryIcon.color }}
+            />
+          </div>
+        )}
+        <div>
+          <h3 className={`font-medium ${goal.isCompleted ? 'text-white' : 'text-text-primary'}`}>
+            {goal.title}
+          </h3>
+          <p className={`text-sm ${goal.isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+            {goal.description}
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary">
+        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+          goal.isCompleted 
+            ? 'bg-white/20 text-white' 
+            : 'bg-primary/10 text-primary'
+        }`}>
           {goal.category}
         </span>
         <button
           onClick={() => onComplete(goal.id, todayString)}
-          className={`p-1 rounded-full ${
+          className={`flex items-center justify-center w-8 h-8 rounded-full ${
             goal.isCompleted
-              ? 'bg-success/10 text-success'
-              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              ? 'bg-white'
+              : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >
-          <CheckCircleIcon className="h-6 w-6" />
+          {goal.isCompleted ? (
+            <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+            </svg>
+          ) : (
+            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+          )}
         </button>
       </div>
     </div>
