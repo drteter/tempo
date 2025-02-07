@@ -1,17 +1,31 @@
 import { CalendarIcon, CheckCircleIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
-import { useGoals } from '../contexts/GoalContext'
+import { useGoals, type Goal } from '../contexts/GoalContext'
+import { useCategories } from '../contexts/CategoryContext'
 import { useState } from 'react'
 import { format, startOfWeek, addDays } from 'date-fns'
 import ScheduleGoalsModal, { WEEKDAYS } from '../components/ScheduleGoalsModal'
 
 export default function WeeklyPlan() {
   const { goals, updateScheduledDays, toggleRoutineCompletion } = useGoals()
+  const { categories } = useCategories()
   const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
   const today = new Date()
   const todayKey = today.toISOString().split('T')[0]
   const weekStart = startOfWeek(today)
   const [selectedDay, setSelectedDay] = useState<{ index: number, date: Date } | null>(null)
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
+
+  const getSchedulingStatus = (goal: Goal) => {
+    const scheduledCount = goal.tracking.scheduledDays.length
+    const targetCount = goal.daysPerWeek || 0
+    const isOnTrack = scheduledCount >= targetCount
+
+    return {
+      scheduledCount,
+      targetCount,
+      isOnTrack
+    }
+  }
 
   const getDaySchedule = (dayIndex: number) => {
     return weeklyGoals.filter(goal => 
@@ -48,6 +62,14 @@ export default function WeeklyPlan() {
     updateScheduledDays(goalId, newDays)
   }
 
+  const getCategoryIcon = (categoryName: string) => {
+    const category = categories.find(c => c.name === categoryName)
+    return category ? {
+      Icon: category.icon,
+      color: category.color
+    } : null
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -78,24 +100,47 @@ export default function WeeklyPlan() {
         <div className="card">
           <h2 className="text-lg font-semibold mb-4">Goals for the Week</h2>
           <div className="space-y-4">
-            {weeklyGoals.map(goal => (
-              <div 
-                key={goal.id} 
-                draggable
-                onDragStart={(e) => handleDragStart(e, goal.id)}
-                className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
-              >
-                <div>
-                  <h3 className="font-medium">{goal.title}</h3>
-                  <p className="text-sm text-text-secondary">{goal.description}</p>
+            {weeklyGoals.map(goal => {
+              const { scheduledCount, targetCount, isOnTrack } = getSchedulingStatus(goal)
+              const categoryIcon = getCategoryIcon(goal.category)
+              
+              return (
+                <div 
+                  key={goal.id} 
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, goal.id)}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
+                >
+                  <div className="flex items-center gap-4">
+                    {categoryIcon && (
+                      <div 
+                        className="p-2 rounded-lg"
+                        style={{ backgroundColor: `${categoryIcon.color}20` }}
+                      >
+                        <categoryIcon.Icon 
+                          className="h-5 w-5"
+                          style={{ color: categoryIcon.color }}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-medium">{goal.title}</h3>
+                      <p className="text-sm text-text-secondary">{goal.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isOnTrack && (
+                      <span className="text-xs font-medium text-emerald-600">
+                        ON TRACK
+                      </span>
+                    )}
+                    <span className={`text-xs ${isOnTrack ? 'text-emerald-600' : 'text-text-secondary'}`}>
+                      {scheduledCount}/{targetCount} scheduled
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary">
-                    {goal.category}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

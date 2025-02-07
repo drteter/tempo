@@ -1,22 +1,24 @@
 import { Dialog } from '@headlessui/react'
 import { useState } from 'react'
-import { useGoals } from '../contexts/GoalContext'
+import { useGoals, type Goal } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 
 type GoalModalProps = {
   isOpen: boolean
   onClose: () => void
+  editGoal?: Goal
 }
 
-export default function GoalModal({ isOpen, onClose }: GoalModalProps) {
-  const { addGoal } = useGoals()
+export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps) {
+  const { addGoal, updateGoal } = useGoals()
   const { categories } = useCategories()
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: categories[0]?.name || '',
-    timeHorizon: 'weekly' as const,
-    daysPerWeek: 1
+    title: editGoal?.title || '',
+    description: editGoal?.description || '',
+    category: editGoal?.category || categories[0]?.name || '',
+    timeHorizon: editGoal?.timeHorizon || 'weekly' as const,
+    daysPerWeek: editGoal?.daysPerWeek || 1,
+    status: editGoal?.status || 'not_started' as const
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -24,13 +26,17 @@ export default function GoalModal({ isOpen, onClose }: GoalModalProps) {
     
     const goalData = {
       ...formData,
-      tracking: {
-        scheduledDays: [], // Will be set on Weekly Plan page
+      tracking: editGoal?.tracking || {
+        scheduledDays: [],
         completedDates: []
       }
     }
     
-    addGoal(goalData)
+    if (editGoal) {
+      updateGoal({ ...editGoal, ...goalData })
+    } else {
+      addGoal(goalData)
+    }
     onClose()
   }
 
@@ -39,8 +45,10 @@ export default function GoalModal({ isOpen, onClose }: GoalModalProps) {
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="mx-auto max-w-lg rounded-lg bg-white p-6 shadow-xl">
-          <Dialog.Title className="text-xl font-semibold mb-4">Create New Goal</Dialog.Title>
+        <Dialog.Panel className="mx-auto w-full max-w-3xl rounded-lg bg-white p-6 shadow-xl">
+          <Dialog.Title className="text-xl font-semibold mb-4">
+            {editGoal ? 'Edit Goal' : 'Create New Goal'}
+          </Dialog.Title>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -136,7 +144,7 @@ export default function GoalModal({ isOpen, onClose }: GoalModalProps) {
                 type="submit"
                 className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
               >
-                Create Goal
+                {editGoal ? 'Update Goal' : 'Create Goal'}
               </button>
             </div>
           </form>
