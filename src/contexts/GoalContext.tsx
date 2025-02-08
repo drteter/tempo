@@ -1,7 +1,7 @@
 import { createContext, useContext, ReactNode } from 'react'
 import { useDatabase } from '../hooks/useDatabase'
 
-export type TimeHorizon = 'weekly' | 'quarterly' | 'annual' | 'lifetime'
+export type TimeHorizon = 'weekly' | 'quarterly' | 'annual' | 'lifetime' | 'ongoing'
 
 export type Goal = {
   id: string
@@ -10,6 +10,11 @@ export type Goal = {
   status: 'not_started' | 'in_progress' | 'completed' | 'archived'
   category: string
   timeHorizon: TimeHorizon
+  type?: 'good_enough'
+  threshold?: number
+  relationship?: '>=' | '<=' | '>' | '<' | '='
+  timeframe?: 'quarterly' | 'annual'
+  unit?: '' | '$' | '%'
   daysPerWeek?: number
   tracking: {
     scheduledDays: number[]
@@ -25,6 +30,9 @@ export type Goal = {
       completed: boolean
       dueDate?: string
     }[]
+    quarterlyValues?: {
+      [key: string]: number  // Format: "Q1 2023": 75, "Q2 2023": 80, etc.
+    }
   }
 }
 

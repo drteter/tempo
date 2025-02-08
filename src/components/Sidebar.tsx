@@ -4,7 +4,8 @@ import {
   ChartBarIcon,
   FlagIcon,
   SparklesIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  HandThumbUpIcon
 } from '@heroicons/react/24/outline'
 import { NavLink } from 'react-router-dom'
 
@@ -12,6 +13,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Weekly Plan', href: '/weekly', icon: CalendarIcon },
   { name: 'Quarterly Baseline', href: '/quarterly', icon: ChartBarIcon },
+  { name: 'Good Enough', href: '/good-enough', icon: HandThumbUpIcon },
   { name: 'Annual Goals', href: '/annual', icon: FlagIcon },
   { name: 'Lifetime Goals', href: '/lifetime', icon: SparklesIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon }

@@ -6,6 +6,7 @@ import WeeklyPlan from './pages/WeeklyPlan'
 import QuarterlyBaseline from './pages/QuarterlyBaseline'
 import AnnualGoals from './pages/AnnualGoals'
 import LifetimeGoals from './pages/LifetimeGoals'
+import GoodEnough from './pages/GoodEnough'
 import Settings from './pages/Settings'
 import GoalDetail from './pages/GoalDetail'
 import { CategoryProvider } from './contexts/CategoryContext'
@@ -24,6 +25,7 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/weekly" element={<WeeklyPlan />} />
                 <Route path="/quarterly" element={<QuarterlyBaseline />} />
+                <Route path="/good-enough" element={<GoodEnough />} />
                 <Route path="/annual" element={<AnnualGoals />} />
                 <Route path="/lifetime" element={<LifetimeGoals />} />
                 <Route path="/settings" element={<Settings />} />
