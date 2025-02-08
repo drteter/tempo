@@ -113,28 +113,43 @@ export default function WeeklyPlan() {
 
   const handleDragStart = (e: React.DragEvent, goalId: string) => {
     if (isReadOnly) return
-    e.dataTransfer.setData('goalId', goalId)
+    console.log('Drag start with goal ID:', goalId)
+    e.dataTransfer.setData('text/plain', goalId)
   }
 
-  const handleDrop = (e: React.DragEvent, dayValue: number) => {
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = async (e: React.DragEvent, dayValue: number) => {
     e.preventDefault()
     if (isReadOnly) return
 
-    const goalId = e.dataTransfer.getData('goalId')
-    const goal = filteredWeeklyGoals.find(g => g.id === goalId)
-    if (!goal) return
+    const goalId = e.dataTransfer.getData('text/plain')
+    console.log('Drop with goal ID:', goalId, 'day value:', dayValue)
+    
+    const goal = weeklyGoals.find(g => g.id === goalId)
+    if (!goal) {
+      console.error('Goal not found:', goalId)
+      return
+    }
 
-    if (isNextWeek) {
-      // Store in next week's schedule
-      const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
-      setWeekSchedule(nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue].sort())
-    } else {
-      // Update current week's schedule
-      const currentDays = goal.tracking.scheduledDays
-      if (!currentDays.includes(dayValue)) {
-        const newDays = [...currentDays, dayValue].sort()
-        updateScheduledDays(goalId, newDays)
+    try {
+      if (isNextWeek) {
+        const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+        console.log('Setting next week schedule:', nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue])
+        await setWeekSchedule(nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue].sort())
+      } else {
+        const currentDays = goal.tracking.scheduledDays
+        if (!currentDays.includes(dayValue)) {
+          const newDays = [...currentDays, dayValue].sort()
+          console.log('Updating current week days:', goalId, newDays)
+          await updateScheduledDays(goalId, newDays)
+        }
       }
+    } catch (error) {
+      console.error('Error updating schedule:', error)
     }
   }
 
@@ -230,7 +245,7 @@ export default function WeeklyPlan() {
               return (
                 <div 
                   key={goal.id} 
-                  draggable
+                  draggable="true"
                   onDragStart={(e) => handleDragStart(e, goal.id)}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
                 >
@@ -278,7 +293,7 @@ export default function WeeklyPlan() {
               return (
                 <div 
                   key={day.value}
-                  onDragOver={e => e.preventDefault()}
+                  onDragOver={handleDragOver}
                   onDrop={e => handleDrop(e, day.value)}
                   className={`p-4 rounded-lg ${
                     format(dayDate, 'yyyy-MM-dd') === todayKey

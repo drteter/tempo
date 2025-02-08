@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
-import { startOfWeek, subWeeks } from 'date-fns'
+import { createContext, useContext, ReactNode } from 'react'
+import { useDatabase } from '../hooks/useDatabase'
 
 export type TimeHorizon = 'weekly' | 'quarterly' | 'annual' | 'lifetime'
 
@@ -48,149 +48,91 @@ type GoalContextType = {
   processWeekTransition: () => void  // Called on app load to handle week transitions
 }
 
-const GoalContext = createContext<GoalContextType | undefined>(undefined)
+export const GoalContext = createContext<GoalContextType | undefined>(undefined)
 
 export function GoalProvider({ children }: { children: ReactNode }) {
-  const [goals, setGoals] = useState<Goal[]>([
-    {
-      id: '1',
-      title: 'Run a Marathon',
-      description: 'Train and complete a full marathon',
-      status: 'in_progress',
-      category: 'Health',
-      timeHorizon: 'annual',
-      tracking: {
-        scheduledDays: [],
-        completedDates: [],
-        checkpoints: [
-          {
-            id: '1',
-            title: 'Run 5K without stopping',
-            completed: true,
-            dueDate: '2024-03-31'
-          },
-          {
-            id: '2',
-            title: 'Complete first half marathon',
-            completed: false,
-            dueDate: '2024-08-31'
-          }
-        ]
-      }
-    },
-    {
-      id: '2',
-      title: 'Daily Reading Habit',
-      description: 'Read for at least 30 minutes every day',
-      status: 'in_progress',
-      category: 'Learning',
-      timeHorizon: 'weekly',
-      daysPerWeek: 5,
-      tracking: {
-        scheduledDays: [1, 2, 3, 4, 5], // Mon-Fri
-        completedDates: []
-      }
-    }
-  ])
-  const [weeklySchedules, setWeeklySchedules] = useState<WeeklySchedule[]>([])
+  const { 
+    goals, 
+    addGoal: dbAddGoal, 
+    updateGoal: dbUpdateGoal,
+    deleteGoal: dbDeleteGoal,
+    weeklySchedules,
+    setWeekSchedule: dbSetWeekSchedule
+  } = useDatabase()
 
-  const addGoal = (newGoal: Omit<Goal, 'id' | 'status'>) => {
-    const goal: Goal = {
+  const addGoal = async (newGoal: Omit<Goal, 'id' | 'status'>) => {
+    const goal: Omit<Goal, 'id'> = {
       ...newGoal,
-      id: Math.random().toString(36).substr(2, 9),
-      status: 'not_started',
+      status: 'not_started' as const,
       tracking: {
         ...newGoal.tracking,
         scheduledDays: newGoal.tracking.scheduledDays || [],
         completedDates: []
       }
     }
-    setGoals(current => [...current, goal])
+    await dbAddGoal(goal)
   }
 
-  const updateScheduledDays = (goalId: string, days: number[]) => {
-    setGoals(current =>
-      current.map(goal =>
-        goal.id === goalId
-          ? {
-              ...goal,
-              tracking: {
-                ...goal.tracking,
-                scheduledDays: days
-              }
-            }
-          : goal
-      )
-    )
+  const updateScheduledDays = async (goalId: string, days: number[]) => {
+    const goal = goals.find(g => g.id === goalId)
+    if (!goal) return
+
+    await dbUpdateGoal({
+      ...goal,
+      tracking: {
+        ...goal.tracking,
+        scheduledDays: days
+      }
+    })
   }
 
-  const updateGoal = (updatedGoal: Goal) => {
-    setGoals(current =>
-      current.map(goal => (goal.id === updatedGoal.id ? updatedGoal : goal))
-    )
+  const updateGoal = async (updatedGoal: Goal) => {
+    await dbUpdateGoal(updatedGoal)
   }
 
-  const deleteGoal = (id: string) => {
-    setGoals(current => current.filter(goal => goal.id !== id))
+  const deleteGoal = async (id: string) => {
+    await dbDeleteGoal(id)
   }
 
   const getGoalsByTimeHorizon = (timeHorizon: TimeHorizon) => {
     return goals.filter(goal => goal.timeHorizon === timeHorizon)
   }
 
-  const toggleRoutineCompletion = (goalId: string, date: string) => {
-    setGoals(current =>
-      current.map(goal => {
-        if (goal.id === goalId && goal.tracking.scheduledDays.length > 0) {
-          const completedDates = goal.tracking.completedDates
-          const isCompleted = completedDates.includes(date)
-          return {
-            ...goal,
-            tracking: {
-              ...goal.tracking,
-              completedDates: isCompleted
-                ? completedDates.filter(d => d !== date)
-                : [...completedDates, date]
-            }
-          }
-        }
-        return goal
-      })
-    )
+  const toggleRoutineCompletion = async (goalId: string, date: string) => {
+    const goal = goals.find(g => g.id === goalId)
+    if (!goal) return
+
+    const isCompleted = goal.tracking.completedDates.includes(date)
+    const newCompletedDates = isCompleted
+      ? goal.tracking.completedDates.filter(d => d !== date)
+      : [...goal.tracking.completedDates, date]
+
+    await dbUpdateGoal({
+      ...goal,
+      tracking: {
+        ...goal.tracking,
+        completedDates: newCompletedDates
+      }
+    })
   }
 
-  const processWeekTransition = () => {
-    const today = new Date()
-    const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 }).toISOString().split('T')[0]
-    const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
-
-    const thisWeekSchedule = weeklySchedules.find(s => s.weekStartDate === thisWeekStart)
-    if (thisWeekSchedule) {
-      setWeeklySchedules(current => [
-        ...current.filter(s => s.weekStartDate !== lastWeekStart),
-        { weekStartDate: lastWeekStart, scheduledDays: thisWeekSchedule.scheduledDays }
-      ])
+  const processWeekTransition = async () => {
+    // Move last week's schedule to history and reset current week
+    const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
+    
+    for (const goal of weeklyGoals) {
+      await dbUpdateGoal({
+        ...goal,
+        tracking: {
+          ...goal.tracking,
+          scheduledDays: []
+        }
+      })
     }
   }
 
-  const setWeekSchedule = (weekStartDate: string, goalId: string, days: number[]) => {
-    setWeeklySchedules(current => {
-      const existingSchedule = current.find(s => s.weekStartDate === weekStartDate)
-      if (existingSchedule) {
-        return current.map(schedule => 
-          schedule.weekStartDate === weekStartDate
-            ? {
-                ...schedule,
-                scheduledDays: { ...schedule.scheduledDays, [goalId]: days }
-              }
-            : schedule
-        )
-      }
-      return [...current, {
-        weekStartDate,
-        scheduledDays: { [goalId]: days }
-      }]
-    })
+  const setWeekSchedule = async (weekStartDate: string, goalId: string, days: number[]) => {
+    await dbSetWeekSchedule(weekStartDate, goalId, days)
   }
 
   return (
@@ -213,7 +155,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useGoals() {
+export const useGoals = () => {
   const context = useContext(GoalContext)
   if (context === undefined) {
     throw new Error('useGoals must be used within a GoalProvider')
