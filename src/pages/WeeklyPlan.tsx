@@ -178,13 +178,33 @@ export default function WeeklyPlan() {
     }
   }
 
-  const handleRemoveFromDay = (goalId: string, dayValue: number) => {
+  const handleRemoveFromDay = async (id: string, type: 'goal' | 'habit', dayValue: number) => {
     if (isReadOnly) return
-    const goal = filteredWeeklyGoals.find(g => g.id === goalId)
-    if (!goal) return
 
-    const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)
-    updateScheduledDays(goalId, newDays)
+    if (type === 'goal') {
+      const goal = weeklyGoals.find(g => g.id === id)
+      if (!goal) return
+
+      if (isNextWeek) {
+        const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+        const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)
+        await setWeekSchedule(nextWeekStart, id, newDays)
+      } else {
+        const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)
+        await updateScheduledDays(id, newDays)
+      }
+    } else if (type === 'habit') {
+      const habit = habits.find(h => h.id === id)
+      if (!habit) return
+      
+      // Convert from Monday-based to Sunday-based index for habits
+      const sundayBasedDay = (dayValue + 6) % 7
+      const newDays = habit.scheduledDays.filter(d => d !== sundayBasedDay)
+      await updateHabit({
+        ...habit,
+        scheduledDays: newDays
+      })
+    }
   }
 
   const getCategoryIcon = (categoryName: string) => {
@@ -306,36 +326,49 @@ export default function WeeklyPlan() {
             })}
             {habits.map(habit => {
               const categoryIcon = getCategoryIcon(habit.category)
+              const isCompleted = habit.completedDates.includes(todayKey)
               
               return (
-                <div 
-                  key={habit.id} 
-                  draggable="true"
-                  onDragStart={(e) => handleDragStart(e, habit.id, 'habit')}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
+                <div
+                  key={habit.id}
+                  onClick={() => toggleHabitCompletion(habit.id, todayKey)}
+                  className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
+                    isCompleted 
+                      ? 'bg-[#10B981] text-white' 
+                      : 'hover:bg-gray-50'
+                  }`}
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
                     {categoryIcon && (
                       <div 
-                        className="p-2 rounded-lg"
-                        style={{ backgroundColor: `${categoryIcon.color}20` }}
+                        className={`p-1 rounded-lg ${
+                          isCompleted ? 'bg-white/20' : ''
+                        }`}
+                        style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                       >
                         <categoryIcon.Icon 
-                          className="h-5 w-5"
-                          style={{ color: categoryIcon.color }}
+                          className="h-3 w-3"
+                          style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                         />
                       </div>
                     )}
-                    <div>
-                      <h3 className="font-medium">{habit.title}</h3>
-                      <p className="text-sm text-text-secondary">{habit.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-text-secondary">
-                      {habit.scheduledDays.length} days scheduled
+                    <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                      {habit.title}
                     </span>
                   </div>
+                  {!isReadOnly && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveFromDay(habit.id, 'habit', today.getDate())
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded-full"
+                    >
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+                      </svg>
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -371,7 +404,8 @@ export default function WeeklyPlan() {
                           return (
                             <div
                               key={habit.id}
-                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                              onClick={() => toggleHabitCompletion(habit.id, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
@@ -380,42 +414,34 @@ export default function WeeklyPlan() {
                               <div className="flex items-center gap-2">
                                 {categoryIcon && (
                                   <div 
-                                    className={`p-1.5 rounded-lg ${
+                                    className={`p-1 rounded-lg ${
                                       isCompleted ? 'bg-white/20' : ''
                                     }`}
                                     style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                                   >
                                     <categoryIcon.Icon 
-                                      className="h-4 w-4"
+                                      className="h-3 w-3"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <div>
-                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                    {habit.title}
-                                  </div>
-                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
-                                    {habit.description}
-                                  </div>
-                                </div>
+                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                  {habit.title}
+                                </span>
                               </div>
-                              <button
-                                onClick={() => toggleHabitCompletion(habit.id, dayKey)}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                                  isCompleted
-                                    ? 'bg-white'
-                                    : 'bg-gray-100 hover:bg-gray-200'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                              {!isReadOnly && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRemoveFromDay(habit.id, 'habit', index)
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                >
+                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
                                   </svg>
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                )}
-                              </button>
+                                </button>
+                              )}
                             </div>
                           )
                         })}
@@ -426,7 +452,8 @@ export default function WeeklyPlan() {
                           return (
                             <div
                               key={goal.id}
-                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                              onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
@@ -435,42 +462,34 @@ export default function WeeklyPlan() {
                               <div className="flex items-center gap-2">
                                 {categoryIcon && (
                                   <div 
-                                    className={`p-1.5 rounded-lg ${
+                                    className={`p-1 rounded-lg ${
                                       isCompleted ? 'bg-white/20' : ''
                                     }`}
                                     style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                                   >
                                     <categoryIcon.Icon 
-                                      className="h-4 w-4"
+                                      className="h-3 w-3"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <div>
-                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                    {goal.title}
-                                  </div>
-                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
-                                    {goal.description}
-                                  </div>
-                                </div>
+                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                  {goal.title}
+                                </span>
                               </div>
-                              <button
-                                onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                                  isCompleted
-                                    ? 'bg-white'
-                                    : 'bg-gray-100 hover:bg-gray-200'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                              {!isReadOnly && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRemoveFromDay(goal.id, 'goal', index)
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                >
+                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
                                   </svg>
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                )}
-                              </button>
+                                </button>
+                              )}
                             </div>
                           )
                         })}
@@ -499,7 +518,8 @@ export default function WeeklyPlan() {
                           return (
                             <div
                               key={habit.id}
-                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                              onClick={() => toggleHabitCompletion(habit.id, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
@@ -508,42 +528,34 @@ export default function WeeklyPlan() {
                               <div className="flex items-center gap-2">
                                 {categoryIcon && (
                                   <div 
-                                    className={`p-1.5 rounded-lg ${
+                                    className={`p-1 rounded-lg ${
                                       isCompleted ? 'bg-white/20' : ''
                                     }`}
                                     style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                                   >
                                     <categoryIcon.Icon 
-                                      className="h-4 w-4"
+                                      className="h-3 w-3"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <div>
-                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                    {habit.title}
-                                  </div>
-                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
-                                    {habit.description}
-                                  </div>
-                                </div>
+                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                  {habit.title}
+                                </span>
                               </div>
-                              <button
-                                onClick={() => toggleHabitCompletion(habit.id, dayKey)}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                                  isCompleted
-                                    ? 'bg-white'
-                                    : 'bg-gray-100 hover:bg-gray-200'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                              {!isReadOnly && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRemoveFromDay(habit.id, 'habit', index)
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                >
+                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
                                   </svg>
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                )}
-                              </button>
+                                </button>
+                              )}
                             </div>
                           )
                         })}
@@ -554,7 +566,8 @@ export default function WeeklyPlan() {
                           return (
                             <div
                               key={goal.id}
-                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                              onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
@@ -563,42 +576,34 @@ export default function WeeklyPlan() {
                               <div className="flex items-center gap-2">
                                 {categoryIcon && (
                                   <div 
-                                    className={`p-1.5 rounded-lg ${
+                                    className={`p-1 rounded-lg ${
                                       isCompleted ? 'bg-white/20' : ''
                                     }`}
                                     style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
                                   >
                                     <categoryIcon.Icon 
-                                      className="h-4 w-4"
+                                      className="h-3 w-3"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <div>
-                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                    {goal.title}
-                                  </div>
-                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
-                                    {goal.description}
-                                  </div>
-                                </div>
+                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                  {goal.title}
+                                </span>
                               </div>
-                              <button
-                                onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                                  isCompleted
-                                    ? 'bg-white'
-                                    : 'bg-gray-100 hover:bg-gray-200'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                              {!isReadOnly && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRemoveFromDay(goal.id, 'goal', index)
+                                  }}
+                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                >
+                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
                                   </svg>
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-                                )}
-                              </button>
+                                </button>
+                              )}
                             </div>
                           )
                         })}

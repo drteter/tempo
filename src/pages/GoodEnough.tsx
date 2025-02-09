@@ -18,6 +18,16 @@ function getCurrentQuarter(): { quarter: Quarter; year: number } {
   return { quarter, year: now.getFullYear() }
 }
 
+function getQuarterNumber(quarter: Quarter): number {
+  switch (quarter) {
+    case 'Q1': return 1
+    case 'Q2': return 2
+    case 'Q3': return 3
+    case 'Q4': return 4
+    default: return 0
+  }
+}
+
 function getStatusColor(
   value: number | undefined, 
   threshold: number, 
@@ -42,26 +52,36 @@ function getStatusColor(
       return 'bg-gray-100 text-gray-500'
     }
 
-    // Use the year total for comparison
+    // For annual goals, we compare the year-to-date total against a pro-rated target
+    const currentQuarterNum = getQuarterNumber(currentQuarter.quarter)
+    const quarterNum = getQuarterNumber(quarter)
+    
+    // If we're looking at a past year, use the full threshold
+    let adjustedThreshold = threshold
+    if (year === currentQuarter.year) {
+      adjustedThreshold = (threshold / 4) * currentQuarterNum
+    }
+
+    // Use the year total for all quarters in the year
     const meetsThreshold = (() => {
       switch (relationship) {
-        case '>=': return yearTotal >= threshold
-        case '<=': return yearTotal <= threshold
-        case '>': return yearTotal > threshold
-        case '<': return yearTotal < threshold
-        case '=': return yearTotal === threshold
+        case '>=': return yearTotal >= adjustedThreshold
+        case '<=': return yearTotal <= adjustedThreshold
+        case '>': return yearTotal > adjustedThreshold
+        case '<': return yearTotal < adjustedThreshold
+        case '=': return yearTotal === adjustedThreshold
         default: return false
       }
     })()
 
     const closeToThreshold = (() => {
-      const tolerance = threshold * 0.1 // 10% tolerance
+      const tolerance = adjustedThreshold * 0.1 // 10% tolerance
       switch (relationship) {
-        case '>=': return yearTotal >= threshold - tolerance
-        case '<=': return yearTotal <= threshold + tolerance
-        case '>': return yearTotal > threshold - tolerance
-        case '<': return yearTotal < threshold + tolerance
-        case '=': return Math.abs(yearTotal - threshold) <= tolerance
+        case '>=': return yearTotal >= adjustedThreshold - tolerance && yearTotal < adjustedThreshold
+        case '<=': return yearTotal <= adjustedThreshold + tolerance && yearTotal > adjustedThreshold
+        case '>': return yearTotal > adjustedThreshold - tolerance && yearTotal <= adjustedThreshold
+        case '<': return yearTotal < adjustedThreshold + tolerance && yearTotal >= adjustedThreshold
+        case '=': return Math.abs(yearTotal - adjustedThreshold) <= tolerance && yearTotal !== adjustedThreshold
         default: return false
       }
     })()
@@ -98,15 +118,6 @@ function getStatusColor(
   if (meetsThreshold) return 'bg-green-100 text-green-800'
   if (closeToThreshold) return 'bg-yellow-100 text-yellow-800'
   return 'bg-red-100 text-red-800'
-}
-
-function getQuarterNumber(quarter: Quarter): number {
-  switch (quarter) {
-    case 'Q1': return 1
-    case 'Q2': return 2
-    case 'Q3': return 3
-    case 'Q4': return 4
-  }
 }
 
 function formatValue(value: number | undefined, unit: string | undefined): string {
