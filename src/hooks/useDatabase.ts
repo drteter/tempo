@@ -33,7 +33,7 @@ export function useDatabase() {
     }
   }, [])
 
-  // Don't try to query the database until it's initialized
+  // Use goalsFromDb as our single source of truth
   const goals = useLiveQuery(
     async () => isInitialized ? await db.goals.toArray() : [],
     [isInitialized]
@@ -67,7 +67,7 @@ export function useDatabase() {
 
   const updateGoal = async (goal: Goal) => {
     if (!isInitialized) throw new Error('Database not initialized')
-    return await db.goals.put(goal)
+    await db.goals.put(goal)
   }
 
   const deleteGoal = async (id: string) => {

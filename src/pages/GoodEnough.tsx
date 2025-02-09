@@ -3,6 +3,7 @@ import { useGoals } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState, Fragment } from 'react'
 import GoodEnoughModal from '../components/GoodEnoughModal'
+import GoalProgress from '../components/GoalProgress'
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
@@ -116,7 +117,7 @@ function formatValue(value: number | undefined, unit: string | undefined): strin
 }
 
 export default function GoodEnough() {
-  const { goals, updateGoal } = useGoals()
+  const { goals, updateGoal, updateGoalProgress } = useGoals()
   const { categories } = useCategories()
   const goodEnoughGoals = goals.filter(goal => goal.type === 'good_enough')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -300,68 +301,84 @@ export default function GoodEnough() {
                       />
                     </tr>
                     {categoryGoals.map(goal => (
-                      <tr key={goal.id} className="border-t">
-                        <td className="px-4 py-1.5 sticky left-0 bg-white">
-                          <div className="text-right whitespace-nowrap">
-                            <div className="font-medium">{goal.title}</div>
-                            <div className="text-xs italic text-gray-500">
-                              {goal.relationship} {formatValue(goal.threshold, goal.unit)}
+                      <Fragment key={goal.id}>
+                        <tr className="border-t">
+                          <td className="px-4 py-1.5 sticky left-0 bg-white">
+                            <div className="text-right whitespace-nowrap">
+                              <div className="font-medium">{goal.title}</div>
+                              <div className="text-xs italic text-gray-500">
+                                {goal.relationship} {formatValue(goal.threshold, goal.unit)}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        {quarters.map(({ quarter, year }, index) => {
-                          const quarterKey = getQuarterKey(quarter, year)
-                          const value = goal.tracking.quarterlyValues?.[quarterKey]
-                          const isEditing = editingValue?.goalId === goal.id && 
-                                         editingValue.quarter === quarter && 
-                                         editingValue.year === year
+                          </td>
+                          {quarters.map(({ quarter, year }, index) => {
+                            const quarterKey = getQuarterKey(quarter, year)
+                            const value = goal.tracking.quarterlyValues?.[quarterKey]
+                            const isEditing = editingValue?.goalId === goal.id && 
+                                           editingValue.quarter === quarter && 
+                                           editingValue.year === year
 
-                          return (
-                            <td 
-                              key={quarterKey} 
-                              className={`px-4 py-1.5 ${
-                                index > 0 && quarters[index - 1].year !== year ? 'border-l-2 border-gray-200' : ''
-                              }`}
-                            >
-                              {isEditing ? (
-                                <form onSubmit={handleValueSubmit} className="flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    value={newValue}
-                                    onChange={(e) => setNewValue(e.target.value)}
-                                    className="w-20 rounded-md border border-gray-300 px-2 py-1"
-                                    autoFocus
-                                  />
-                                  <button type="submit" className="text-primary hover:text-primary/80">
-                                    Save
+                            return (
+                              <td 
+                                key={quarterKey} 
+                                className={`px-4 py-1.5 ${
+                                  index > 0 && quarters[index - 1].year !== year ? 'border-l-2 border-gray-200' : ''
+                                }`}
+                              >
+                                {isEditing ? (
+                                  <form onSubmit={handleValueSubmit} className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={newValue}
+                                      onChange={(e) => setNewValue(e.target.value)}
+                                      className="w-20 rounded-md border border-gray-300 px-2 py-1"
+                                      autoFocus
+                                    />
+                                    <button type="submit" className="text-primary hover:text-primary/80">
+                                      Save
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setEditingValue({ goalId: goal.id, quarter, year })
+                                      setNewValue(value?.toString() || '')
+                                    }}
+                                    className={`w-full px-3 py-1 rounded-full text-sm ${getStatusColor(
+                                      value, 
+                                      goal.threshold || 0, 
+                                      goal.relationship || '>=',
+                                      goal.timeframe,
+                                      goal.tracking.quarterlyValues,
+                                      quarter,
+                                      year
+                                    )}`}
+                                  >
+                                    {value !== undefined ? formatValue(value, goal.unit) : (
+                                      <PencilIcon className="h-4 w-4" />
+                                    )}
                                   </button>
-                                </form>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setEditingValue({ goalId: goal.id, quarter, year })
-                                    setNewValue(value?.toString() || '')
-                                  }}
-                                  className={`w-full px-3 py-1 rounded-full text-sm ${getStatusColor(
-                                    value, 
-                                    goal.threshold || 0, 
-                                    goal.relationship || '>=',
-                                    goal.timeframe,
-                                    goal.tracking.quarterlyValues,
-                                    quarter,
-                                    year
-                                  )}`}
-                                >
-                                  {value !== undefined ? formatValue(value, goal.unit) : (
-                                    <PencilIcon className="h-4 w-4" />
-                                  )}
-                                </button>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-1.5 sticky left-0 bg-white">
+                            <div className="text-right whitespace-nowrap">
+                              <GoalProgress 
+                                goalId={goal.id} 
+                                onProgressUpdate={(amount: number) => {
+                                  if (goal.linkedGoalId) {
+                                    updateGoalProgress(goal.linkedGoalId, amount)
+                                  }
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      </Fragment>
                     ))}
                   </Fragment>
                 ))}

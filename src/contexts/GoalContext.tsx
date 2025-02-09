@@ -34,6 +34,8 @@ export type Goal = {
       [key: string]: number  // Format: "Q1 2023": 75, "Q2 2023": 80, etc.
     }
   }
+  linkedGoalId?: string    // Reference to parent goal
+  progress?: GoalProgress  // For goals that need numerical tracking
 }
 
 export type WeeklySchedule = {
@@ -41,6 +43,12 @@ export type WeeklySchedule = {
   scheduledDays: {
     [goalId: string]: number[]  // Maps goal IDs to their scheduled days
   }
+}
+
+type GoalProgress = {
+  target: number
+  current: number
+  unit: string
 }
 
 type GoalContextType = {
@@ -54,6 +62,7 @@ type GoalContextType = {
   weeklySchedules: WeeklySchedule[]
   setWeekSchedule: (weekStartDate: string, goalId: string, days: number[]) => void
   processWeekTransition: () => void  // Called on app load to handle week transitions
+  updateGoalProgress: (goalId: string, amount: number) => void
 }
 
 export const GoalContext = createContext<GoalContextType | undefined>(undefined)
@@ -113,15 +122,19 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     const isCompleted = goal.tracking.completedDates.includes(date)
     const newCompletedDates = isCompleted
       ? goal.tracking.completedDates.filter(d => d !== date)
-      : [...goal.tracking.completedDates, date]
+      : [...goal.tracking.completedDates, date].sort()
 
-    await dbUpdateGoal({
+    const updatedGoal = {
       ...goal,
       tracking: {
         ...goal.tracking,
         completedDates: newCompletedDates
       }
-    })
+    }
+
+    // Just update the goal in the database
+    // The useDatabase hook should handle state updates automatically
+    await dbUpdateGoal(updatedGoal)
   }
 
   const processWeekTransition = async () => {
@@ -143,6 +156,30 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     await dbSetWeekSchedule(weekStartDate, goalId, days)
   }
 
+  const updateGoalProgress = async (goalId: string, amount: number) => {
+    const goal = goals.find(g => g.id === goalId)
+    if (!goal?.progress) return
+
+    const newProgress = {
+      ...goal.progress,
+      current: goal.progress.current + amount
+    }
+
+    // Update this goal's progress
+    await dbUpdateGoal({
+      ...goal,
+      progress: newProgress
+    })
+
+    // If this goal is linked to another goal, update that one too
+    if (goal.linkedGoalId) {
+      const parentGoal = goals.find(g => g.id === goal.linkedGoalId)
+      if (parentGoal?.progress) {
+        await updateGoalProgress(parentGoal.id, amount)
+      }
+    }
+  }
+
   return (
     <GoalContext.Provider 
       value={{ 
@@ -155,7 +192,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         updateScheduledDays,
         weeklySchedules,
         setWeekSchedule,
-        processWeekTransition
+        processWeekTransition,
+        updateGoalProgress
       }}
     >
       {children}

@@ -15,8 +15,8 @@ export class TempoDB extends Dexie {
   constructor() {
     super('tempo')
     
-    this.version(1).stores({
-      goals: 'id, title, category, timeHorizon, status',
+    this.version(2).stores({
+      goals: 'id, title, category, timeHorizon, status, linkedGoalId',
       habits: '++id, title, category, frequency',
       categories: '++id, name',
       weeklySchedules: 'weekStartDate'

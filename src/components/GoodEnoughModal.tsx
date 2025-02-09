@@ -15,7 +15,7 @@ const UNITS = ['', '$', '%'] as const
 
 export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProps) {
   const { categories } = useCategories()
-  const { addGoal } = useGoals()
+  const { addGoal, goals } = useGoals()
   
   const [formData, setFormData] = useState({
     title: '',
@@ -23,7 +23,8 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
     threshold: '',
     relationship: '>=',
     timeframe: 'quarterly' as typeof TIMEFRAMES[number],
-    unit: '' as typeof UNITS[number]
+    unit: '' as typeof UNITS[number],
+    linkedGoalId: ''
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -56,7 +57,8 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
       threshold: '',
       relationship: '>=',
       timeframe: 'quarterly',
-      unit: ''
+      unit: '',
+      linkedGoalId: ''
     })
   }
 
@@ -208,6 +210,27 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
                             ))}
                           </select>
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium">Link to Lifetime Goal (Optional)</label>
+                        <select
+                          className="w-full px-3 py-2 border rounded"
+                          value={formData.linkedGoalId}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            linkedGoalId: e.target.value
+                          }))}
+                        >
+                          <option value="">None</option>
+                          {goals
+                            .filter(g => g.timeHorizon === 'annual' || g.timeHorizon === 'lifetime')
+                            .map(g => (
+                              <option key={g.id} value={g.id}>
+                                {g.title} ({g.timeHorizon})
+                              </option>
+                            ))}
+                        </select>
                       </div>
 
                       <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">

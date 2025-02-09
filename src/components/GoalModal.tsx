@@ -10,7 +10,7 @@ type GoalModalProps = {
 }
 
 export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps) {
-  const { addGoal, updateGoal } = useGoals()
+  const { addGoal, updateGoal, goals } = useGoals()
   const { categories } = useCategories()
   const [formData, setFormData] = useState({
     title: editGoal?.title || '',
@@ -18,7 +18,9 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
     category: editGoal?.category || categories[0]?.name || '',
     timeHorizon: editGoal?.timeHorizon || 'weekly' as const,
     daysPerWeek: editGoal?.daysPerWeek || 1,
-    status: editGoal?.status || 'not_started' as const
+    status: editGoal?.status || 'not_started' as const,
+    target: editGoal?.tracking.target || { value: 0, unit: '' },
+    linkedGoalId: editGoal?.linkedGoalId || ''
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -26,9 +28,11 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
     
     const goalData = {
       ...formData,
-      tracking: editGoal?.tracking || {
-        scheduledDays: [],
-        completedDates: []
+      tracking: {
+        scheduledDays: editGoal?.tracking.scheduledDays || [],
+        completedDates: editGoal?.tracking.completedDates || [],
+        target: formData.target,
+        progress: editGoal?.tracking.progress || 0
       }
     }
     
@@ -103,6 +107,32 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
               </select>
             </div>
 
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Link to Parent Goal (Optional)</label>
+              <select
+                className="w-full rounded-md border p-2"
+                value={formData.linkedGoalId}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  linkedGoalId: e.target.value
+                }))}
+              >
+                <option value="">None</option>
+                {goals
+                  .filter(g => {
+                    const timeHorizons = ['weekly', 'quarterly', 'annual', 'lifetime']
+                    const currentIndex = timeHorizons.indexOf(formData.timeHorizon)
+                    const goalIndex = timeHorizons.indexOf(g.timeHorizon)
+                    return goalIndex > currentIndex && g.id !== editGoal?.id
+                  })
+                  .map(g => (
+                    <option key={g.id} value={g.id}>
+                      {g.title} ({g.timeHorizon})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
             {formData.timeHorizon === 'weekly' && (
               <div>
                 <label className="block text-sm font-medium mb-1">Days per Week</label>
@@ -128,6 +158,43 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
                   >
                     +
                   </button>
+                </div>
+              </div>
+            )}
+
+            {formData.timeHorizon !== 'weekly' && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium">Target</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    className="flex-1 px-3 py-2 border rounded"
+                    placeholder="Target value"
+                    value={formData.target?.value || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      target: {
+                        value: parseFloat(e.target.value),
+                        unit: prev.target?.unit || ''
+                      }
+                    }))}
+                  />
+                  <select
+                    className="w-32 px-3 py-2 border rounded"
+                    value={formData.target?.unit || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      target: {
+                        value: prev.target?.value || 0,
+                        unit: e.target.value
+                      }
+                    }))}
+                  >
+                    <option value="">No unit</option>
+                    <option value="$">Dollars ($)</option>
+                    <option value="%">Percent (%)</option>
+                    <option value="miles">Miles</option>
+                  </select>
                 </div>
               </div>
             )}

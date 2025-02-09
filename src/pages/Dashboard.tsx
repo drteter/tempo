@@ -83,10 +83,11 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
   const today = new Date()
   const todayString = today.toISOString().split('T')[0]
   const categoryIcon = getCategoryIcon(goal.category)
+  const isCompleted = goal.tracking.completedDates.includes(todayString)
 
   return (
     <div className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-      goal.isCompleted 
+      isCompleted 
         ? 'bg-[#10B981] text-white' 
         : 'hover:bg-gray-50'
     }`}>
@@ -94,30 +95,30 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
         {categoryIcon && (
           <div 
             className={`p-2 rounded-lg ${
-              goal.isCompleted 
+              isCompleted 
                 ? 'bg-white/20' 
                 : ''
             }`}
-            style={{ backgroundColor: goal.isCompleted ? undefined : `${categoryIcon.color}20` }}
+            style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
           >
             <categoryIcon.Icon 
               className="h-5 w-5"
-              style={{ color: goal.isCompleted ? 'white' : categoryIcon.color }}
+              style={{ color: isCompleted ? 'white' : categoryIcon.color }}
             />
           </div>
         )}
         <div>
-          <h3 className={`font-medium ${goal.isCompleted ? 'text-white' : 'text-text-primary'}`}>
+          <h3 className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
             {goal.title}
           </h3>
-          <p className={`text-sm ${goal.isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+          <p className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
             {goal.description}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2">
         <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-          goal.isCompleted 
+          isCompleted 
             ? 'bg-white/20 text-white' 
             : 'bg-primary/10 text-primary'
         }`}>
@@ -126,12 +127,12 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
         <button
           onClick={() => onComplete(goal.id, todayString)}
           className={`flex items-center justify-center w-8 h-8 rounded-full ${
-            goal.isCompleted
+            isCompleted
               ? 'bg-white'
               : 'bg-gray-100 hover:bg-gray-200'
           }`}
         >
-          {goal.isCompleted ? (
+          {isCompleted ? (
             <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
               <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
             </svg>

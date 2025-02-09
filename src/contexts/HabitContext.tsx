@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, ReactNode } from 'react'
+import { useDatabase } from '../hooks/useDatabase'
 
 export type Habit = {
   id: string
@@ -21,46 +22,44 @@ type HabitContextType = {
 const HabitContext = createContext<HabitContextType | undefined>(undefined)
 
 export function HabitProvider({ children }: { children: ReactNode }) {
-  const [habits, setHabits] = useState<Habit[]>([])
+  const { 
+    habits, 
+    addHabit: dbAddHabit, 
+    updateHabit: dbUpdateHabit,
+    deleteHabit: dbDeleteHabit 
+  } = useDatabase()
 
-  const addHabit = (newHabit: Omit<Habit, 'id' | 'completedDates'>) => {
-    const habit: Habit = {
+  const addHabit = async (newHabit: Omit<Habit, 'id' | 'completedDates'>) => {
+    const habit: Omit<Habit, 'id'> = {
       ...newHabit,
-      id: Math.random().toString(36).substr(2, 9),
       completedDates: []
     }
-    setHabits(current => [...current, habit])
+    await dbAddHabit(habit)
   }
 
-  const updateHabit = (updatedHabit: Habit) => {
-    setHabits(current =>
-      current.map(habit => (habit.id === updatedHabit.id ? updatedHabit : habit))
-    )
-  }
+  const toggleHabitCompletion = async (habitId: string, date: string) => {
+    const habit = habits.find(h => h.id === habitId)
+    if (!habit) return
 
-  const deleteHabit = (id: string) => {
-    setHabits(current => current.filter(habit => habit.id !== id))
-  }
+    const isCompleted = habit.completedDates.includes(date)
+    const newCompletedDates = isCompleted
+      ? habit.completedDates.filter(d => d !== date)
+      : [...habit.completedDates, date]
 
-  const toggleHabitCompletion = (habitId: string, date: string) => {
-    setHabits(current =>
-      current.map(habit => {
-        if (habit.id === habitId) {
-          const isCompleted = habit.completedDates.includes(date)
-          return {
-            ...habit,
-            completedDates: isCompleted
-              ? habit.completedDates.filter(d => d !== date)
-              : [...habit.completedDates, date]
-          }
-        }
-        return habit
-      })
-    )
+    await dbUpdateHabit({
+      ...habit,
+      completedDates: newCompletedDates
+    })
   }
 
   return (
-    <HabitContext.Provider value={{ habits, addHabit, updateHabit, deleteHabit, toggleHabitCompletion }}>
+    <HabitContext.Provider value={{ 
+      habits, 
+      addHabit,
+      updateHabit: dbUpdateHabit, 
+      deleteHabit: dbDeleteHabit,
+      toggleHabitCompletion 
+    }}>
       {children}
     </HabitContext.Provider>
   )

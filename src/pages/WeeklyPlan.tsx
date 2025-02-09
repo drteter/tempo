@@ -1,5 +1,6 @@
 import { CalendarIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
 import { useGoals, type Goal, type WeeklySchedule } from '../contexts/GoalContext'
+import { useHabits } from '../contexts/HabitContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState, useEffect } from 'react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameWeek } from 'date-fns'
@@ -15,19 +16,20 @@ export default function WeeklyPlan() {
     weeklySchedules,
     setWeekSchedule
   } = useGoals()
+  const { habits, toggleHabitCompletion, updateHabit } = useHabits()
   const { categories } = useCategories()
   const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
   const today = new Date()
   const todayKey = today.toISOString().split('T')[0]
-  const weekStart = startOfWeek(today)
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const [selectedDay, setSelectedDay] = useState<{ index: number, date: Date } | null>(null)
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
   const [selectedDate, setSelectedDate] = useState(today)
 
   // Determine which week we're viewing
-  const isLastWeek = isSameWeek(selectedDate, subWeeks(today, 1))
-  const isThisWeek = isSameWeek(selectedDate, today)
-  const isNextWeek = isSameWeek(selectedDate, addWeeks(today, 1))
+  const isLastWeek = isSameWeek(selectedDate, subWeeks(today, 1), { weekStartsOn: 1 })
+  const isThisWeek = isSameWeek(selectedDate, today, { weekStartsOn: 1 })
+  const isNextWeek = isSameWeek(selectedDate, addWeeks(today, 1), { weekStartsOn: 1 })
   
   // Disable editing for last week
   const isReadOnly = isLastWeek
@@ -106,15 +108,30 @@ export default function WeeklyPlan() {
   const filteredWeeklyGoals = getWeekSchedule()
 
   const getDaySchedule = (dayIndex: number) => {
-    return filteredWeeklyGoals.filter(goal => 
+    // Convert Monday-based dayIndex (0-6, Mon-Sun) to date
+    const date = addDays(weekStart, dayIndex)
+    
+    // Get Sunday-based day of week (0-6, Sun-Sat) for habit scheduling
+    const dayOfWeek = date.getDay()
+    
+    const scheduledGoals = filteredWeeklyGoals.filter(goal => 
       goal.tracking.scheduledDays.includes(dayIndex)
     )
+    
+    // Filter habits using Sunday-based day of week
+    const scheduledHabits = habits.filter(habit => 
+      habit.scheduledDays.includes(dayOfWeek)
+    )
+
+    return {
+      goals: scheduledGoals,
+      habits: scheduledHabits
+    }
   }
 
-  const handleDragStart = (e: React.DragEvent, goalId: string) => {
+  const handleDragStart = (e: React.DragEvent, id: string, type: 'goal' | 'habit') => {
     if (isReadOnly) return
-    console.log('Drag start with goal ID:', goalId)
-    e.dataTransfer.setData('text/plain', goalId)
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id, type }))
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -126,26 +143,34 @@ export default function WeeklyPlan() {
     e.preventDefault()
     if (isReadOnly) return
 
-    const goalId = e.dataTransfer.getData('text/plain')
-    console.log('Drop with goal ID:', goalId, 'day value:', dayValue)
-    
-    const goal = weeklyGoals.find(g => g.id === goalId)
-    if (!goal) {
-      console.error('Goal not found:', goalId)
-      return
-    }
-
     try {
-      if (isNextWeek) {
-        const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
-        console.log('Setting next week schedule:', nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue])
-        await setWeekSchedule(nextWeekStart, goalId, [...goal.tracking.scheduledDays, dayValue].sort())
-      } else {
-        const currentDays = goal.tracking.scheduledDays
-        if (!currentDays.includes(dayValue)) {
-          const newDays = [...currentDays, dayValue].sort()
-          console.log('Updating current week days:', goalId, newDays)
-          await updateScheduledDays(goalId, newDays)
+      const { id, type } = JSON.parse(e.dataTransfer.getData('text/plain'))
+      
+      if (type === 'goal') {
+        const goal = weeklyGoals.find(g => g.id === id)
+        if (!goal) return
+
+        if (isNextWeek) {
+          const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+          await setWeekSchedule(nextWeekStart, id, [...goal.tracking.scheduledDays, dayValue].sort())
+        } else {
+          const currentDays = goal.tracking.scheduledDays
+          if (!currentDays.includes(dayValue)) {
+            const newDays = [...currentDays, dayValue].sort()
+            await updateScheduledDays(id, newDays)
+          }
+        }
+      } else if (type === 'habit') {
+        const habit = habits.find(h => h.id === id)
+        if (!habit) return
+
+        const newScheduledDays = [...habit.scheduledDays]
+        if (!newScheduledDays.includes(dayValue)) {
+          newScheduledDays.push(dayValue)
+          await updateHabit({
+            ...habit,
+            scheduledDays: newScheduledDays.sort()
+          })
         }
       }
     } catch (error) {
@@ -234,11 +259,11 @@ export default function WeeklyPlan() {
       )}
 
       <div className="grid grid-cols-1 gap-6">
-        {/* Weekly Goals Section */}
+        {/* Weekly Goals and Habits Section */}
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Goals for the Week</h2>
+          <h2 className="text-lg font-semibold mb-4">Available Goals and Habits</h2>
           <div className="space-y-4">
-            {filteredWeeklyGoals.map(goal => {
+            {weeklyGoals.map(goal => {
               const { scheduledCount, targetCount, isOnTrack } = getSchedulingStatus(goal)
               const categoryIcon = getCategoryIcon(goal.category)
               
@@ -246,7 +271,7 @@ export default function WeeklyPlan() {
                 <div 
                   key={goal.id} 
                   draggable="true"
-                  onDragStart={(e) => handleDragStart(e, goal.id)}
+                  onDragStart={(e) => handleDragStart(e, goal.id, 'goal')}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
                 >
                   <div className="flex items-center gap-4">
@@ -279,98 +304,310 @@ export default function WeeklyPlan() {
                 </div>
               )
             })}
+            {habits.map(habit => {
+              const categoryIcon = getCategoryIcon(habit.category)
+              
+              return (
+                <div 
+                  key={habit.id} 
+                  draggable="true"
+                  onDragStart={(e) => handleDragStart(e, habit.id, 'habit')}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-move"
+                >
+                  <div className="flex items-center gap-4">
+                    {categoryIcon && (
+                      <div 
+                        className="p-2 rounded-lg"
+                        style={{ backgroundColor: `${categoryIcon.color}20` }}
+                      >
+                        <categoryIcon.Icon 
+                          className="h-5 w-5"
+                          style={{ color: categoryIcon.color }}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-medium">{habit.title}</h3>
+                      <p className="text-sm text-text-secondary">{habit.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-secondary">
+                      {habit.scheduledDays.length} days scheduled
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 
         {/* Daily Schedule Section */}
         <div className="card">
           <h2 className="text-lg font-semibold mb-4">Daily Schedule</h2>
-          <div className={viewType === 'grid' ? 'grid grid-cols-7 gap-4' : 'space-y-6'}>
-            {WEEKDAYS.map(day => {
-              const dayDate = addDays(weekStart, day.value)
-              const scheduledGoals = getDaySchedule(day.value)
+          <div className="space-y-4">
+            {viewType === 'grid' ? (
+              <div className="grid grid-cols-7 gap-4">
+                {[...Array(7)].map((_, index) => {
+                  const date = addDays(weekStart, index)
+                  const { goals: dayGoals, habits: dayHabits } = getDaySchedule(index)
+                  const dayKey = date.toISOString().split('T')[0]
 
-              return (
-                <div 
-                  key={day.value}
-                  onDragOver={handleDragOver}
-                  onDrop={e => handleDrop(e, day.value)}
-                  className={`p-4 rounded-lg ${
-                    format(dayDate, 'yyyy-MM-dd') === todayKey
-                      ? 'bg-primary/5' 
-                      : 'border-2 border-dashed border-gray-200'
-                  }`}
-                >
-                  <h3 className="font-medium mb-3 text-center">{day.label}</h3>
-                  {scheduledGoals.length > 0 ? (
-                    <div className="space-y-2">
-                      {scheduledGoals.map(goal => {
-                        const isCompleted = goal.tracking.completedDates.includes(format(dayDate, 'yyyy-MM-dd'))
-                        const categoryIcon = getCategoryIcon(goal.category)
-                        
-                        return (
-                          <div 
-                            key={goal.id} 
-                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
-                              isCompleted 
-                                ? 'bg-[#10B981] text-white' 
-                                : 'bg-white shadow-sm'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {categoryIcon && (
-                                <div 
-                                  className={`p-1 rounded-lg ${
-                                    isCompleted ? 'bg-white/20' : ''
-                                  }`}
-                                  style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
-                                >
-                                  <categoryIcon.Icon 
-                                    className="h-4 w-4"
-                                    style={{ color: isCompleted ? 'white' : categoryIcon.color }}
-                                  />
+                  return (
+                    <div
+                      key={index}
+                      className="p-4 border rounded-lg"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index)}
+                    >
+                      <h3 className="font-medium text-sm mb-2">
+                        {format(date, 'EEE')}
+                      </h3>
+                      <div className="space-y-2">
+                        {dayHabits.map(habit => {
+                          const categoryIcon = getCategoryIcon(habit.category)
+                          const isCompleted = habit.completedDates.includes(dayKey)
+
+                          return (
+                            <div
+                              key={habit.id}
+                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                                isCompleted 
+                                  ? 'bg-[#10B981] text-white' 
+                                  : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {categoryIcon && (
+                                  <div 
+                                    className={`p-1.5 rounded-lg ${
+                                      isCompleted ? 'bg-white/20' : ''
+                                    }`}
+                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
+                                  >
+                                    <categoryIcon.Icon 
+                                      className="h-4 w-4"
+                                      style={{ color: isCompleted ? 'white' : categoryIcon.color }}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                    {habit.title}
+                                  </div>
+                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                    {habit.description}
+                                  </div>
                                 </div>
-                              )}
-                              <span className="truncate text-sm">{goal.title}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
+                              </div>
                               <button
-                                onClick={() => toggleRoutineCompletion(goal.id, format(dayDate, 'yyyy-MM-dd'))}
-                                className={`flex items-center justify-center w-6 h-6 rounded-full ${
+                                onClick={() => toggleHabitCompletion(habit.id, dayKey)}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
                                   isCompleted
                                     ? 'bg-white'
                                     : 'bg-gray-100 hover:bg-gray-200'
                                 }`}
                               >
                                 {isCompleted ? (
-                                  <svg className="w-4 h-4 text-[#10B981]" viewBox="0 0 24 24">
+                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
                                     <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                                   </svg>
                                 ) : (
-                                  <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                                 )}
                               </button>
+                            </div>
+                          )
+                        })}
+                        {dayGoals.map(goal => {
+                          const categoryIcon = getCategoryIcon(goal.category)
+                          const isCompleted = goal.tracking.completedDates.includes(dayKey)
+
+                          return (
+                            <div
+                              key={goal.id}
+                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                                isCompleted 
+                                  ? 'bg-[#10B981] text-white' 
+                                  : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {categoryIcon && (
+                                  <div 
+                                    className={`p-1.5 rounded-lg ${
+                                      isCompleted ? 'bg-white/20' : ''
+                                    }`}
+                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
+                                  >
+                                    <categoryIcon.Icon 
+                                      className="h-4 w-4"
+                                      style={{ color: isCompleted ? 'white' : categoryIcon.color }}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                    {goal.title}
+                                  </div>
+                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                    {goal.description}
+                                  </div>
+                                </div>
+                              </div>
                               <button
-                                onClick={() => handleRemoveFromDay(goal.id, day.value)}
-                                className={`text-sm ${
-                                  isCompleted ? 'text-white/60 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                                onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                                  isCompleted
+                                    ? 'bg-white'
+                                    : 'bg-gray-100 hover:bg-gray-200'
                                 }`}
                               >
-                                ×
+                                {isCompleted ? (
+                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                  </svg>
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                )}
                               </button>
                             </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-text-secondary text-center py-4">
-                      Drop goals here
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {[...Array(7)].map((_, index) => {
+                  const date = addDays(weekStart, index)
+                  const { goals: dayGoals, habits: dayHabits } = getDaySchedule(index)
+                  const dayKey = date.toISOString().split('T')[0]
+
+                  return (
+                    <div key={index} className="border-b pb-4 last:border-b-0">
+                      <h3 className="font-medium mb-2">
+                        {format(date, 'EEEE')}
+                      </h3>
+                      <div className="space-y-2">
+                        {dayHabits.map(habit => {
+                          const categoryIcon = getCategoryIcon(habit.category)
+                          const isCompleted = habit.completedDates.includes(dayKey)
+
+                          return (
+                            <div
+                              key={habit.id}
+                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                                isCompleted 
+                                  ? 'bg-[#10B981] text-white' 
+                                  : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {categoryIcon && (
+                                  <div 
+                                    className={`p-1.5 rounded-lg ${
+                                      isCompleted ? 'bg-white/20' : ''
+                                    }`}
+                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
+                                  >
+                                    <categoryIcon.Icon 
+                                      className="h-4 w-4"
+                                      style={{ color: isCompleted ? 'white' : categoryIcon.color }}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                    {habit.title}
+                                  </div>
+                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                    {habit.description}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => toggleHabitCompletion(habit.id, dayKey)}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                                  isCompleted
+                                    ? 'bg-white'
+                                    : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                  </svg>
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                )}
+                              </button>
+                            </div>
+                          )
+                        })}
+                        {dayGoals.map(goal => {
+                          const categoryIcon = getCategoryIcon(goal.category)
+                          const isCompleted = goal.tracking.completedDates.includes(dayKey)
+
+                          return (
+                            <div
+                              key={goal.id}
+                              className={`flex items-center justify-between p-3 rounded transition-colors ${
+                                isCompleted 
+                                  ? 'bg-[#10B981] text-white' 
+                                  : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {categoryIcon && (
+                                  <div 
+                                    className={`p-1.5 rounded-lg ${
+                                      isCompleted ? 'bg-white/20' : ''
+                                    }`}
+                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
+                                  >
+                                    <categoryIcon.Icon 
+                                      className="h-4 w-4"
+                                      style={{ color: isCompleted ? 'white' : categoryIcon.color }}
+                                    />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
+                                    {goal.title}
+                                  </div>
+                                  <div className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                    {goal.description}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                                  isCompleted
+                                    ? 'bg-white'
+                                    : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                  </svg>
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                )}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -385,4 +622,4 @@ export default function WeeklyPlan() {
       )}
     </div>
   )
-} 
+}
