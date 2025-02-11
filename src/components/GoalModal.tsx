@@ -20,7 +20,8 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
     daysPerWeek: editGoal?.daysPerWeek || 1,
     status: editGoal?.status || 'not_started' as const,
     target: editGoal?.tracking.target || { value: 0, unit: '' },
-    linkedGoalId: editGoal?.linkedGoalId || ''
+    linkedGoalId: editGoal?.linkedGoalId || '',
+    trackingType: editGoal?.trackingType || 'boolean' as const
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -133,6 +134,60 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
               </select>
             </div>
 
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Tracking Type</label>
+              <select
+                className="w-full rounded-md border p-2"
+                value={formData.trackingType}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  trackingType: e.target.value as 'boolean' | 'count'
+                }))}
+              >
+                <option value="boolean">Yes/No</option>
+                <option value="count">Count</option>
+              </select>
+
+              {formData.trackingType === 'count' && (
+                <>
+                  <label className="block text-sm font-medium">Target</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="flex-1 px-3 py-2 border rounded"
+                      placeholder="Target value"
+                      value={formData.target?.value || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        target: {
+                          value: parseFloat(e.target.value),
+                          unit: prev.target?.unit || ''
+                        }
+                      }))}
+                    />
+                    <select
+                      className="w-32 px-3 py-2 border rounded"
+                      value={formData.target?.unit || ''}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        target: {
+                          value: prev.target?.value || 0,
+                          unit: e.target.value
+                        }
+                      }))}
+                    >
+                      <option value="">No unit</option>
+                      <option value="$">Dollars ($)</option>
+                      <option value="%">Percent (%)</option>
+                      <option value="miles">Miles</option>
+                      <option value="words">Words</option>
+                      <option value="minutes">Minutes</option>
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+
             {formData.timeHorizon === 'weekly' && (
               <div>
                 <label className="block text-sm font-medium mb-1">Days per Week</label>
@@ -158,43 +213,6 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
                   >
                     +
                   </button>
-                </div>
-              </div>
-            )}
-
-            {formData.timeHorizon !== 'weekly' && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium">Target</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    className="flex-1 px-3 py-2 border rounded"
-                    placeholder="Target value"
-                    value={formData.target?.value || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      target: {
-                        value: parseFloat(e.target.value),
-                        unit: prev.target?.unit || ''
-                      }
-                    }))}
-                  />
-                  <select
-                    className="w-32 px-3 py-2 border rounded"
-                    value={formData.target?.unit || ''}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      target: {
-                        value: prev.target?.value || 0,
-                        unit: e.target.value
-                      }
-                    }))}
-                  >
-                    <option value="">No unit</option>
-                    <option value="$">Dollars ($)</option>
-                    <option value="%">Percent (%)</option>
-                    <option value="miles">Miles</option>
-                  </select>
                 </div>
               </div>
             )}

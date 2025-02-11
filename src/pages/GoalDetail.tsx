@@ -1,104 +1,128 @@
-import { useParams, Link } from 'react-router-dom'
+import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useGoals } from '../contexts/GoalContext'
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import CompletionModal from '../components/CompletionModal'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns'
 
 export default function GoalDetail() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
   const { goals } = useGoals()
   const goal = goals.find(g => g.id === id)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
   if (!goal) {
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/goals"
-            className="p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-gray-50"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-          </Link>
-          <h1 className="text-2xl font-bold text-text-primary">Goal Not Found</h1>
-        </div>
-      </div>
-    )
+    return <div className="p-4">Goal not found</div>
+  }
+
+  const days = eachDayOfInterval({
+    start: startOfMonth(currentMonth),
+    end: endOfMonth(currentMonth)
+  })
+
+  const getCompletionForDate = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    if (goal.trackingType === 'boolean') {
+      return goal.tracking.completedDates.includes(dateStr)
+    } else {
+      return goal.tracking.countHistory?.find(h => h.date === dateStr)?.value
+    }
+  }
+
+  const handlePrevMonth = () => {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))
+  }
+
+  const handleNextMonth = () => {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <Link
-          to="/goals"
-          className="p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-gray-50"
-        >
-          <ArrowLeftIcon className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">{goal.title}</h1>
-          <p className="text-text-secondary">{goal.description}</p>
-        </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-2">{goal.title}</h1>
+        <p className="text-gray-600">{goal.description}</p>
+        
+        {goal.tracking.target && (
+          <div className="mt-4">
+            <h2 className="text-lg font-semibold mb-2">Progress</h2>
+            <div className="flex items-center gap-4">
+              <div className="text-3xl font-bold">
+                {goal.tracking.progress || 0}
+                {goal.tracking.target.unit && <span className="ml-1 text-lg">{goal.tracking.target.unit}</span>}
+              </div>
+              <div className="text-gray-600">
+                of {goal.tracking.target.value}
+                {goal.tracking.target.unit && <span className="ml-1">{goal.tracking.target.unit}</span>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Goal Details</h2>
-          <div className="space-y-4">
-            <p className="text-text-secondary">Status: {goal.status}</p>
-            <p className="text-text-secondary">Category: {goal.category}</p>
-            <p className="text-text-secondary">Time Horizon: {goal.timeHorizon}</p>
-
-            {goal.timeHorizon === 'weekly' && (
-              <p className="text-text-secondary">
-                Days per Week: {goal.daysPerWeek}
-              </p>
-            )}
-
-            {goal.tracking.target && (
-              <p className="text-text-secondary">
-                Target: {goal.tracking.target.value} {goal.tracking.target.unit}
-              </p>
-            )}
-
-            {goal.tracking.progress !== undefined && (
-              <p className="text-text-secondary">Progress: {goal.tracking.progress}%</p>
-            )}
-
-            {goal.timeHorizon === 'weekly' && (
-              <p className="text-text-secondary">
-                Scheduled Days: {goal.tracking.scheduledDays.map(day => 
-                  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]
-                ).join(', ')}
-              </p>
-            )}
-
-            {goal.tracking.checkpoints && goal.tracking.checkpoints.length > 0 && (
-              <div>
-                <h3 className="text-md font-medium mb-2">Checkpoints</h3>
-                <ul className="space-y-2">
-                  {goal.tracking.checkpoints.map((checkpoint) => (
-                    <li
-                      key={checkpoint.id}
-                      className="flex items-center gap-2 text-text-secondary"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checkpoint.completed}
-                        readOnly
-                        className="rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <span>{checkpoint.title}</span>
-                      {checkpoint.dueDate && (
-                        <span className="text-sm">
-                          (Due: {new Date(checkpoint.dueDate).toLocaleDateString()})
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">History</h2>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handlePrevMonth}
+              className="p-2 hover:bg-gray-100 rounded-md"
+            >
+              ←
+            </button>
+            <span className="font-medium">
+              {format(currentMonth, 'MMMM yyyy')}
+            </span>
+            <button
+              onClick={handleNextMonth}
+              className="p-2 hover:bg-gray-100 rounded-md"
+            >
+              →
+            </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="text-center py-2 text-sm font-medium">
+              {day}
+            </div>
+          ))}
+          
+          {days.map(day => {
+            const completion = getCompletionForDate(day)
+            const isCurrentMonth = isSameMonth(day, currentMonth)
+            
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setSelectedDate(format(day, 'yyyy-MM-dd'))}
+                className={`
+                  aspect-square p-2 rounded-md text-sm relative
+                  ${isCurrentMonth ? 'hover:bg-gray-100' : 'opacity-50'}
+                  ${completion ? 'bg-green-100 hover:bg-green-200' : ''}
+                `}
+              >
+                <span className="absolute top-1 left-1">{format(day, 'd')}</span>
+                {typeof completion === 'number' && (
+                  <span className="absolute bottom-1 right-1 text-xs font-medium">
+                    {completion}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
+
+      {selectedDate && (
+        <CompletionModal
+          isOpen={true}
+          onClose={() => setSelectedDate(null)}
+          goal={goal}
+          date={selectedDate}
+        />
+      )}
     </div>
   )
 } 

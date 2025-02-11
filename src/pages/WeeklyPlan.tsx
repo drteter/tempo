@@ -1,4 +1,4 @@
-import { CalendarIcon, Bars4Icon, TableCellsIcon } from '@heroicons/react/24/outline'
+import { CalendarIcon, Bars4Icon, TableCellsIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useGoals, type Goal, type WeeklySchedule } from '../contexts/GoalContext'
 import { useHabits } from '../contexts/HabitContext'
 import { useCategories } from '../contexts/CategoryContext'
@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameWeek } from 'date-fns'
 import ScheduleGoalsModal, { WEEKDAYS } from '../components/ScheduleGoalsModal'
 import WeekSelector from '../components/WeekSelector'
+import CompletionModal from '../components/CompletionModal'
 
 export default function WeeklyPlan() {
   const { 
@@ -25,6 +26,7 @@ export default function WeeklyPlan() {
   const [selectedDay, setSelectedDay] = useState<{ index: number, date: Date } | null>(null)
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
   const [selectedDate, setSelectedDate] = useState(today)
+  const [selectedCountGoal, setSelectedCountGoal] = useState<{ goal: Goal, date: string } | null>(null)
 
   // Determine which week we're viewing
   const isLastWeek = isSameWeek(selectedDate, subWeeks(today, 1), { weekStartsOn: 1 })
@@ -222,6 +224,31 @@ export default function WeeklyPlan() {
     })
   }
 
+  const handleGoalClick = (goal: Goal, date: string) => {
+    if (goal.trackingType === 'count') {
+      setSelectedCountGoal({ goal, date })
+    } else {
+      toggleRoutineCompletion(goal.id, date)
+    }
+  }
+
+  const getDayKey = (date: Date) => {
+    // Get today's date at midnight for consistent comparison
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    // Get the target date at midnight
+    const targetDate = new Date(date)
+    targetDate.setHours(0, 0, 0, 0)
+    
+    // If dates match (ignoring time), use today's ISO string
+    if (today.getTime() === targetDate.getTime()) {
+      return new Date().toISOString().split('T')[0]
+    }
+    
+    return date.toISOString().split('T')[0]
+  }
+
   return (
     <div className="space-y-8">
       {areAllGoalsScheduled() && filteredWeeklyGoals.length > 0 && (
@@ -384,7 +411,7 @@ export default function WeeklyPlan() {
                 {[...Array(7)].map((_, index) => {
                   const date = addDays(weekStart, index)
                   const { goals: dayGoals, habits: dayHabits } = getDaySchedule(index)
-                  const dayKey = date.toISOString().split('T')[0]
+                  const dayKey = getDayKey(date)
 
                   return (
                     <div
@@ -448,34 +475,40 @@ export default function WeeklyPlan() {
                         {dayGoals.map(goal => {
                           const categoryIcon = getCategoryIcon(goal.category)
                           const isCompleted = goal.tracking.completedDates.includes(dayKey)
+                          const countValue = goal.trackingType === 'count' && 
+                            goal.tracking.countHistory?.find(h => h.date === dayKey)?.value
 
                           return (
                             <div
                               key={goal.id}
-                              onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
-                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
+                              onClick={() => handleGoalClick(goal, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer max-w-[200px] ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {categoryIcon && (
-                                  <div 
-                                    className={`p-1 rounded-lg ${
-                                      isCompleted ? 'bg-white/20' : ''
-                                    }`}
-                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
-                                  >
+                                  <div className={`shrink-0 p-1 rounded ${
+                                    isCompleted ? 'bg-white/20' : ''
+                                  }`}>
                                     <categoryIcon.Icon 
-                                      className="h-3 w-3"
+                                      className="h-4 w-4"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                  {goal.title}
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm">
+                                    {goal.title}
+                                  </div>
+                                  {goal.trackingType === 'count' && (
+                                    <div className={`text-xs ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                      {countValue || 0} / {goal.tracking.target?.value || 0} {goal.tracking.target?.unit}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               {!isReadOnly && (
                                 <button
@@ -483,11 +516,9 @@ export default function WeeklyPlan() {
                                     e.stopPropagation()
                                     handleRemoveFromDay(goal.id, 'goal', index)
                                   }}
-                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                  className="shrink-0 ml-2 p-1 hover:bg-gray-100 rounded"
                                 >
-                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                                  </svg>
+                                  <XMarkIcon className="h-4 w-4 text-gray-400" />
                                 </button>
                               )}
                             </div>
@@ -503,7 +534,7 @@ export default function WeeklyPlan() {
                 {[...Array(7)].map((_, index) => {
                   const date = addDays(weekStart, index)
                   const { goals: dayGoals, habits: dayHabits } = getDaySchedule(index)
-                  const dayKey = date.toISOString().split('T')[0]
+                  const dayKey = getDayKey(date)
 
                   return (
                     <div key={index} className="border-b pb-4 last:border-b-0">
@@ -562,34 +593,40 @@ export default function WeeklyPlan() {
                         {dayGoals.map(goal => {
                           const categoryIcon = getCategoryIcon(goal.category)
                           const isCompleted = goal.tracking.completedDates.includes(dayKey)
+                          const countValue = goal.trackingType === 'count' && 
+                            goal.tracking.countHistory?.find(h => h.date === dayKey)?.value
 
                           return (
                             <div
                               key={goal.id}
-                              onClick={() => toggleRoutineCompletion(goal.id, dayKey)}
-                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer ${
+                              onClick={() => handleGoalClick(goal, dayKey)}
+                              className={`flex items-center justify-between p-2 rounded transition-colors cursor-pointer max-w-[200px] ${
                                 isCompleted 
                                   ? 'bg-[#10B981] text-white' 
                                   : 'hover:bg-gray-50'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {categoryIcon && (
-                                  <div 
-                                    className={`p-1 rounded-lg ${
-                                      isCompleted ? 'bg-white/20' : ''
-                                    }`}
-                                    style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
-                                  >
+                                  <div className={`shrink-0 p-1 rounded ${
+                                    isCompleted ? 'bg-white/20' : ''
+                                  }`}>
                                     <categoryIcon.Icon 
-                                      className="h-3 w-3"
+                                      className="h-4 w-4"
                                       style={{ color: isCompleted ? 'white' : categoryIcon.color }}
                                     />
                                   </div>
                                 )}
-                                <span className={`text-sm font-medium truncate ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-                                  {goal.title}
-                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-sm">
+                                    {goal.title}
+                                  </div>
+                                  {goal.trackingType === 'count' && (
+                                    <div className={`text-xs ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
+                                      {countValue || 0} / {goal.tracking.target?.value || 0} {goal.tracking.target?.unit}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               {!isReadOnly && (
                                 <button
@@ -597,11 +634,9 @@ export default function WeeklyPlan() {
                                     e.stopPropagation()
                                     handleRemoveFromDay(goal.id, 'goal', index)
                                   }}
-                                  className="p-1 hover:bg-gray-100 rounded-full"
+                                  className="shrink-0 ml-2 p-1 hover:bg-gray-100 rounded"
                                 >
-                                  <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                                  </svg>
+                                  <XMarkIcon className="h-4 w-4 text-gray-400" />
                                 </button>
                               )}
                             </div>
@@ -623,6 +658,15 @@ export default function WeeklyPlan() {
           onClose={() => setSelectedDay(null)}
           dayIndex={selectedDay.index}
           date={selectedDay.date}
+        />
+      )}
+
+      {selectedCountGoal && (
+        <CompletionModal
+          isOpen={true}
+          onClose={() => setSelectedCountGoal(null)}
+          goal={selectedCountGoal.goal}
+          date={selectedCountGoal.date}
         />
       )}
     </div>

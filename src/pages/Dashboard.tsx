@@ -3,6 +3,8 @@ import { useGoals } from '../contexts/GoalContext'
 import { useHabits } from '../contexts/HabitContext'
 import { useCategories } from '../contexts/CategoryContext'
 import type { Habit } from '../contexts/HabitContext'
+import CompletionModal from '../components/CompletionModal'
+import { useState } from 'react'
 
 // Add getCategoryIcon function
 const getCategoryIcon = (categoryName: string) => {
@@ -50,16 +52,86 @@ function HabitItem({ habit }: { habit: Habit }) {
           {habit.description}
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+      <button
+        onClick={() => toggleHabitCompletion(habit.id, todayString)}
+        className={`flex items-center justify-center w-8 h-8 rounded-full ${
+          isCompletedToday
+            ? 'bg-white'
+            : 'bg-gray-100 hover:bg-gray-200'
+        }`}
+      >
+        {isCompletedToday ? (
+          <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+          </svg>
+        ) : (
+          <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+        )}
+      </button>
+    </div>
+  )
+}
+
+function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, date: string) => void }) {
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
+  const today = new Date()
+  const todayString = today.toISOString().split('T')[0]
+  const categoryIcon = getCategoryIcon(goal.category)
+  const isCompletedToday = goal.tracking.completedDates.includes(todayString)
+
+  const handleClick = () => {
+    if (goal.trackingType === 'count') {
+      setShowCompletionModal(true)
+    } else {
+      onComplete(goal.id, todayString)
+    }
+  }
+
+  return (
+    <>
+      <div
+        onClick={handleClick}
+        className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
           isCompletedToday 
-            ? 'bg-white/20 text-white' 
-            : 'bg-primary/10 text-primary'
-        }`}>
-          {habit.category}
-        </span>
+            ? 'bg-[#10B981] text-white' 
+            : 'hover:bg-gray-50'
+        }`}
+      >
+        <div className="flex items-center gap-4">
+          {categoryIcon && (
+            <div 
+              className={`p-2 rounded-lg ${
+                isCompletedToday 
+                  ? 'bg-white/20' 
+                  : ''
+              }`}
+              style={{ backgroundColor: isCompletedToday ? undefined : `${categoryIcon.color}20` }}
+            >
+              <categoryIcon.Icon 
+                className="h-5 w-5"
+                style={{ color: isCompletedToday ? 'white' : categoryIcon.color }}
+              />
+            </div>
+          )}
+          <div>
+            <h3 className={`font-medium ${isCompletedToday ? 'text-white' : 'text-text-primary'}`}>
+              {goal.title}
+            </h3>
+            <p className={`text-sm ${isCompletedToday ? 'text-white/80' : 'text-text-secondary'}`}>
+              {goal.description}
+            </p>
+            {goal.trackingType === 'count' && goal.tracking.countHistory && (
+              <p className={`text-xs mt-1 ${isCompletedToday ? 'text-white/80' : 'text-text-secondary'}`}>
+                Progress: {goal.tracking.progress || 0} {goal.tracking.target?.unit}
+              </p>
+            )}
+          </div>
+        </div>
         <button
-          onClick={() => toggleHabitCompletion(habit.id, todayString)}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleClick()
+          }}
           className={`flex items-center justify-center w-8 h-8 rounded-full ${
             isCompletedToday
               ? 'bg-white'
@@ -75,73 +147,16 @@ function HabitItem({ habit }: { habit: Habit }) {
           )}
         </button>
       </div>
-    </div>
-  )
-}
 
-function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, date: string) => void }) {
-  const today = new Date()
-  const todayString = today.toISOString().split('T')[0]
-  const categoryIcon = getCategoryIcon(goal.category)
-  const isCompleted = goal.tracking.completedDates.includes(todayString)
-
-  return (
-    <div className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-      isCompleted 
-        ? 'bg-[#10B981] text-white' 
-        : 'hover:bg-gray-50'
-    }`}>
-      <div className="flex items-center gap-4">
-        {categoryIcon && (
-          <div 
-            className={`p-2 rounded-lg ${
-              isCompleted 
-                ? 'bg-white/20' 
-                : ''
-            }`}
-            style={{ backgroundColor: isCompleted ? undefined : `${categoryIcon.color}20` }}
-          >
-            <categoryIcon.Icon 
-              className="h-5 w-5"
-              style={{ color: isCompleted ? 'white' : categoryIcon.color }}
-            />
-          </div>
-        )}
-        <div>
-          <h3 className={`font-medium ${isCompleted ? 'text-white' : 'text-text-primary'}`}>
-            {goal.title}
-          </h3>
-          <p className={`text-sm ${isCompleted ? 'text-white/80' : 'text-text-secondary'}`}>
-            {goal.description}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-          isCompleted 
-            ? 'bg-white/20 text-white' 
-            : 'bg-primary/10 text-primary'
-        }`}>
-          {goal.category}
-        </span>
-        <button
-          onClick={() => onComplete(goal.id, todayString)}
-          className={`flex items-center justify-center w-8 h-8 rounded-full ${
-            isCompleted
-              ? 'bg-white'
-              : 'bg-gray-100 hover:bg-gray-200'
-          }`}
-        >
-          {isCompleted ? (
-            <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-            </svg>
-          ) : (
-            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
-          )}
-        </button>
-      </div>
-    </div>
+      {showCompletionModal && (
+        <CompletionModal
+          isOpen={true}
+          onClose={() => setShowCompletionModal(false)}
+          goal={goal}
+          date={todayString}
+        />
+      )}
+    </>
   )
 }
 
@@ -156,7 +171,8 @@ function Dashboard() {
   // Get today's habits and weekly goals based on scheduled days
   const todaysActivities = () => {
     const today = new Date()
-    const dayOfWeek = today.getDay()
+    // Convert Sunday-based (0-6) to Monday-based (1-7)
+    const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1
     const todayKey = today.toISOString().split('T')[0]
 
     const todaysHabits = habits.filter(habit => 

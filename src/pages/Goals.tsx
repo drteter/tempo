@@ -8,14 +8,22 @@ type Goal = {
   description: string
   status: 'not_started' | 'in_progress' | 'completed' | 'archived'
   category: string
+  trackingType: 'boolean' | 'count'
+  tracking: {
+    target?: {
+      value: number
+      unit: string
+    }
+    progress?: number
+  }
 }
 
 function GoalCard({ goal }: { goal: Goal }) {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   const handleClick = () => {
-    navigate(`/goals/${goal.id}`);
-  };
+    navigate(`/goals/${goal.id}`)
+  }
 
   return (
     <div 
@@ -30,6 +38,11 @@ function GoalCard({ goal }: { goal: Goal }) {
           <div>
             <h3 className="font-medium text-text-primary">{goal.title}</h3>
             <p className="text-sm text-text-secondary">{goal.description}</p>
+            {goal.trackingType === 'count' && goal.tracking.target && (
+              <p className="text-xs text-text-secondary mt-1">
+                Progress: {goal.tracking.progress || 0} / {goal.tracking.target.value} {goal.tracking.target.unit}
+              </p>
+            )}
           </div>
         </div>
         <ChevronRightIcon className="h-5 w-5 text-text-secondary" />
@@ -41,6 +54,11 @@ function GoalCard({ goal }: { goal: Goal }) {
         <span className="text-xs font-medium px-2 py-1 rounded-full bg-info/10 text-info">
           {goal.status.replace('_', ' ')}
         </span>
+        {goal.trackingType === 'count' && (
+          <span className="text-xs font-medium px-2 py-1 rounded-full bg-secondary/10 text-secondary">
+            Count-based
+          </span>
+        )}
       </div>
     </div>
   )

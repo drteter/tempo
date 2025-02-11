@@ -11,10 +11,11 @@ export type Goal = {
   category: string
   timeHorizon: TimeHorizon
   type?: 'good_enough'
+  trackingType: 'boolean' | 'count'
   threshold?: number
   relationship?: '>=' | '<=' | '>' | '<' | '='
   timeframe?: 'quarterly' | 'annual'
-  unit?: '' | '$' | '%'
+  unit?: '' | '$' | '%' | 'miles' | 'words' | 'minutes'
   daysPerWeek?: number
   tracking: {
     scheduledDays: number[]
@@ -24,6 +25,10 @@ export type Goal = {
       unit: string
     }
     progress?: number
+    countHistory?: {
+      date: string
+      value: number
+    }[]
     checkpoints?: {
       id: string
       title: string
@@ -62,7 +67,8 @@ type GoalContextType = {
   weeklySchedules: WeeklySchedule[]
   setWeekSchedule: (weekStartDate: string, goalId: string, days: number[]) => void
   processWeekTransition: () => void  // Called on app load to handle week transitions
-  updateGoalProgress: (goalId: string, amount: number) => void
+  updateGoalProgress: (goalId: string, amount: number, date: string) => void
+  checkGoalCompletion: (goal: Goal, date: string) => boolean
 }
 
 export const GoalContext = createContext<GoalContextType | undefined>(undefined)
@@ -156,28 +162,58 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     await dbSetWeekSchedule(weekStartDate, goalId, days)
   }
 
-  const updateGoalProgress = async (goalId: string, amount: number) => {
+  const updateGoalProgress = async (goalId: string, amount: number, date: string) => {
     const goal = goals.find(g => g.id === goalId)
-    if (!goal?.progress) return
+    if (!goal) return
 
-    const newProgress = {
-      ...goal.progress,
-      current: goal.progress.current + amount
-    }
+    // Get existing count history
+    const newCountHistory = [
+      ...(goal.tracking.countHistory || []).filter(h => h.date !== date),
+      { date, value: amount }
+    ]
 
-    // Update this goal's progress
+    // Calculate total progress
+    const totalProgress = newCountHistory.reduce((sum, entry) => sum + entry.value, 0)
+
+    // Check if daily target is met
+    const meetsTarget = goal.tracking.target ? amount >= goal.tracking.target.value : true
+    
+    // Update completedDates based on target
+    const newCompletedDates = meetsTarget
+      ? [...new Set([...goal.tracking.completedDates, date])].sort()
+      : goal.tracking.completedDates.filter(d => d !== date)
+
+    // Update the goal with all changes
     await dbUpdateGoal({
       ...goal,
-      progress: newProgress
+      tracking: {
+        ...goal.tracking,
+        countHistory: newCountHistory,
+        progress: totalProgress,
+        completedDates: newCompletedDates
+      }
     })
 
     // If this goal is linked to another goal, update that one too
     if (goal.linkedGoalId) {
       const parentGoal = goals.find(g => g.id === goal.linkedGoalId)
-      if (parentGoal?.progress) {
-        await updateGoalProgress(parentGoal.id, amount)
+      if (parentGoal) {
+        await updateGoalProgress(parentGoal.id, amount, date)
       }
     }
+  }
+
+  const checkGoalCompletion = (goal: Goal, date: string) => {
+    if (goal.trackingType === 'boolean') {
+      return goal.tracking.completedDates.includes(date)
+    }
+    
+    if (goal.trackingType === 'count') {
+      const dailyValue = goal.tracking.countHistory?.find(h => h.date === date)?.value || 0
+      return goal.tracking.target ? dailyValue >= goal.tracking.target.value : dailyValue > 0
+    }
+    
+    return false
   }
 
   return (
@@ -193,7 +229,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         weeklySchedules,
         setWeekSchedule,
         processWeekTransition,
-        updateGoalProgress
+        updateGoalProgress,
+        checkGoalCompletion
       }}
     >
       {children}
