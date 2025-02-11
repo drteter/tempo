@@ -4,7 +4,7 @@ import { useHabits } from '../contexts/HabitContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState, useEffect } from 'react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameWeek } from 'date-fns'
-import ScheduleGoalsModal, { WEEKDAYS } from '../components/ScheduleGoalsModal'
+import ScheduleGoalsModal from '../components/ScheduleGoalsModal'
 import WeekSelector from '../components/WeekSelector'
 import CompletionModal from '../components/CompletionModal'
 
