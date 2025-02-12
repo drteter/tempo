@@ -41,6 +41,7 @@ export type Goal = {
   }
   linkedGoalId?: string    // Reference to parent goal
   progress?: GoalProgress  // For goals that need numerical tracking
+  parentGoalId?: string  // Reference to parent annual/lifetime goal
 }
 
 export type WeeklySchedule = {

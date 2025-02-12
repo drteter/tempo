@@ -1,8 +1,10 @@
 import { FlagIcon } from '@heroicons/react/24/outline'
 import { useGoals } from '../contexts/GoalContext'
+import { useNavigate } from 'react-router-dom'
 
 export default function AnnualGoals() {
   const { goals } = useGoals()
+  const navigate = useNavigate()
   const annualGoals = goals.filter(goal => goal.timeHorizon === 'annual')
 
   return (
@@ -24,7 +26,12 @@ export default function AnnualGoals() {
             <div className="space-y-4">
               {annualGoals.map(goal => (
                 <div key={goal.id} className="p-4 border rounded-lg">
-                  <h3 className="font-medium">{goal.title}</h3>
+                  <h3 
+                    onClick={() => navigate(`/goals/${goal.id}`)}
+                    className="font-medium cursor-pointer hover:underline"
+                  >
+                    {goal.title}
+                  </h3>
                   <p className="text-sm text-text-secondary">{goal.description}</p>
                 </div>
               ))}
