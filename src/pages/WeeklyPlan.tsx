@@ -7,6 +7,7 @@ import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameWeek } from 'da
 import ScheduleGoalsModal from '../components/ScheduleGoalsModal'
 import WeekSelector from '../components/WeekSelector'
 import CompletionModal from '../components/CompletionModal'
+import { useNavigate } from 'react-router-dom'
 
 export default function WeeklyPlan() {
   const { 
@@ -27,6 +28,7 @@ export default function WeeklyPlan() {
   const [viewType, setViewType] = useState<'grid' | 'list'>('grid')
   const [selectedDate, setSelectedDate] = useState(today)
   const [selectedCountGoal, setSelectedCountGoal] = useState<{ goal: Goal, date: string } | null>(null)
+  const navigate = useNavigate()
 
   // Determine which week we're viewing
   const isLastWeek = isSameWeek(selectedDate, subWeeks(today, 1), { weekStartsOn: 1 })
@@ -334,7 +336,16 @@ export default function WeeklyPlan() {
                       </div>
                     )}
                     <div>
-                      <h3 className="font-medium">{goal.title}</h3>
+                      <h3 
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          navigate(`/goals/${goal.id}`)
+                        }}
+                        className="font-medium cursor-pointer hover:underline"
+                      >
+                        {goal.title}
+                      </h3>
                       <p className="text-sm text-text-secondary">{goal.description}</p>
                     </div>
                   </div>

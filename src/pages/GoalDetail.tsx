@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useGoals } from '../contexts/GoalContext'
 import CompletionModal from '../components/CompletionModal'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth } from 'date-fns'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 
 export default function GoalDetail() {
+  const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { goals } = useGoals()
   const goal = goals.find(g => g.id === id)
@@ -39,6 +41,14 @@ export default function GoalDetail() {
 
   return (
     <div className="p-6">
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900"
+      >
+        <ArrowLeftIcon className="h-5 w-5" />
+        <span>Back</span>
+      </button>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">{goal.title}</h1>
         <p className="text-gray-600">{goal.description}</p>

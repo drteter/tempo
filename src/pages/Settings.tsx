@@ -3,11 +3,13 @@ import { PencilIcon, TrashIcon, Cog6ToothIcon } from '@heroicons/react/24/outlin
 import { useGoals, type Goal } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import GoalModal from '../components/GoalModal'
+import { useNavigate } from 'react-router-dom'
 
 function Settings() {
   const { goals, deleteGoal } = useGoals()
   const { categories } = useCategories()
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
+  const navigate = useNavigate()
 
   const handleGoalEdit = (goal: Goal) => {
     setSelectedGoal(goal)
@@ -45,7 +47,7 @@ function Settings() {
               const categoryIcon = getCategoryIcon(goal.category)
               
               return (
-                <div key={goal.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div key={goal.id} className="flex items-center justify-between p-4 border-b last:border-b-0">
                   <div className="flex items-center gap-4">
                     {categoryIcon && (
                       <div 
@@ -59,7 +61,12 @@ function Settings() {
                       </div>
                     )}
                     <div>
-                      <h3 className="font-medium">{goal.title}</h3>
+                      <h3 
+                        onClick={() => navigate(`/goals/${goal.id}`)}
+                        className="font-medium text-text-primary cursor-pointer hover:underline"
+                      >
+                        {goal.title}
+                      </h3>
                       <p className="text-sm text-text-secondary">{goal.description}</p>
                       <p className="text-xs text-text-secondary mt-1">
                         {goal.timeHorizon.charAt(0).toUpperCase() + goal.timeHorizon.slice(1)}
