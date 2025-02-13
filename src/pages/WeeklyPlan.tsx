@@ -16,7 +16,8 @@ export default function WeeklyPlan() {
     toggleRoutineCompletion, 
     processWeekTransition,
     weeklySchedules,
-    setWeekSchedule
+    setWeekSchedule,
+    checkGoalCompletion
   } = useGoals()
   const { habits, toggleHabitCompletion, updateHabit } = useHabits()
   const { categories } = useCategories()
@@ -485,7 +486,9 @@ export default function WeeklyPlan() {
                         })}
                         {dayGoals.map(goal => {
                           const categoryIcon = getCategoryIcon(goal.category)
-                          const isCompleted = goal.tracking.completedDates.includes(dayKey)
+                          const isCompleted = goal.trackingType === 'count'
+                            ? checkGoalCompletion(goal, dayKey)
+                            : goal.tracking.completedDates.includes(dayKey)
                           const countValue = goal.trackingType === 'count' && 
                             goal.tracking.countHistory?.find(h => h.date === dayKey)?.value
 
@@ -603,7 +606,9 @@ export default function WeeklyPlan() {
                         })}
                         {dayGoals.map(goal => {
                           const categoryIcon = getCategoryIcon(goal.category)
-                          const isCompleted = goal.tracking.completedDates.includes(dayKey)
+                          const isCompleted = goal.trackingType === 'count'
+                            ? checkGoalCompletion(goal, dayKey)
+                            : goal.tracking.completedDates.includes(dayKey)
                           const countValue = goal.trackingType === 'count' && 
                             goal.tracking.countHistory?.find(h => h.date === dayKey)?.value
 

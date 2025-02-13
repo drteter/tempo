@@ -60,10 +60,23 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const navigate = useNavigate()
   const { categories } = useCategories()
+  const { checkGoalCompletion } = useGoals()
   const today = new Date()
   const todayString = today.toISOString().split('T')[0]
   const categoryIcon = getCategoryIcon(goal.category)
-  const isCompletedToday = goal.tracking.completedDates.includes(todayString)
+  
+  const isCompletedToday = goal.trackingType === 'count'
+    ? checkGoalCompletion(goal, todayString)
+    : goal.tracking.completedDates.includes(todayString)
+
+  console.log('Goal completion status:', {
+    goalTitle: goal.title,
+    trackingType: goal.trackingType,
+    todayString,
+    isCompletedToday,
+    countHistory: goal.tracking.countHistory,
+    completedDates: goal.tracking.completedDates
+  })
 
   const formatValue = (value: number, unit: string) => {
     const formatter = new Intl.NumberFormat('en-US')
@@ -168,12 +181,18 @@ function Dashboard() {
   const { goals, toggleRoutineCompletion, recalculateAllGoalsProgress } = useGoals()
   const { habits } = useHabits()
   
+  // Only recalculate when the component mounts for the first time
   useEffect(() => {
-    console.log('Dashboard mounted, running recalculation...')
-    if (recalculateAllGoalsProgress) {
+    const lastRecalcTime = localStorage.getItem('lastRecalcTime')
+    const now = Date.now()
+    
+    // Only recalculate if it's been more than 5 minutes since the last recalc
+    if (!lastRecalcTime || now - parseInt(lastRecalcTime) > 5 * 60 * 1000) {
+      console.log('Dashboard mounted, running recalculation...')
       recalculateAllGoalsProgress()
+      localStorage.setItem('lastRecalcTime', now.toString())
     }
-  }, [recalculateAllGoalsProgress])
+  }, []) // Remove recalculateAllGoalsProgress from deps to only run on mount
 
   // Get today's habits and weekly goals based on scheduled days
   const todaysActivities = () => {

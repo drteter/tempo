@@ -10,18 +10,20 @@ type CompletionModalProps = {
 }
 
 export default function CompletionModal({ isOpen, onClose, goal, date }: CompletionModalProps) {
-  const { updateGoal, updateGoalProgress } = useGoals()
+  const { updateGoal, updateGoalProgress, recalculateAllGoalsProgress } = useGoals()
   const [value, setValue] = useState('')
 
-  // Get existing value when modal opens
+  // Get existing value when modal opens or when date/goal changes
   useEffect(() => {
-    const existingValue = goal.tracking.countHistory?.find(h => h.date === date)?.value
-    if (existingValue) {
-      setValue(existingValue.toString())
-    } else {
-      setValue('')
+    if (isOpen) {
+      const existingValue = goal.tracking.countHistory?.find(h => h.date === date)?.value
+      if (existingValue) {
+        setValue(existingValue.toString())
+      } else {
+        setValue('')
+      }
     }
-  }, [date, goal])
+  }, [isOpen, date, goal.id]) // Only depend on isOpen, date, and goal.id instead of the entire goal object
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,28 +31,19 @@ export default function CompletionModal({ isOpen, onClose, goal, date }: Complet
     
     if (isNaN(numericValue)) return
 
-    await updateGoalProgress(goal.id, numericValue, date)
-    onClose()
-    setValue('')
+    try {
+      await updateGoalProgress(goal.id, numericValue, date)
+      await recalculateAllGoalsProgress()
+      setValue('')
+      onClose()
+    } catch (error) {
+      console.error('Error updating goal progress:', error)
+    }
   }
 
   const handleDelete = async () => {
-    // Remove the entry completely from countHistory instead of setting to 0
-    const newCountHistory = (goal.tracking.countHistory || []).filter(h => h.date !== date)
-    
-    // Calculate new total progress
-    const totalProgress = newCountHistory.reduce((sum, entry) => sum + entry.value, 0)
-
-    // Update the goal with all changes
-    await updateGoal({
-      ...goal,
-      tracking: {
-        ...goal.tracking,
-        countHistory: newCountHistory,
-        progress: totalProgress,
-        completedDates: goal.tracking.completedDates.filter(d => d !== date)
-      }
-    })
+    await updateGoalProgress(goal.id, 0, date)
+    await recalculateAllGoalsProgress()
     onClose()
     setValue('')
   }

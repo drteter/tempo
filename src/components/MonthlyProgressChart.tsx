@@ -71,36 +71,40 @@ export default function MonthlyProgressChart({ goal }: { goal: Goal }) {
   const yearEnd = endOfYear(today)
   const allMonths = eachMonthOfInterval({ start: yearStart, end: yearEnd })
 
-  const getMonthlyProgress = (month: Date) => {
-    const monthStr = format(month, 'yyyy-MM')
-    const monthlyEntries = goal.tracking.countHistory
-      ?.filter(entry => entry.date.startsWith(monthStr))
-    
-    if (!monthlyEntries?.length) return 0
-    return monthlyEntries.reduce((sum, entry) => sum + entry.value, 0)
-  }
-
-  // Calculate cumulative actual progress for each month
-  const actualProgress = allMonths.map((month, index) => {
-    const previousMonths = allMonths.slice(0, index + 1)
-    return {
-      month,
-      progress: previousMonths.reduce((sum, m) => sum + getMonthlyProgress(m), 0)
-    }
-  })
-
-  // Calculate projected values using AnnualProgressCard logic
-  const currentProgress = actualProgress[today.getMonth()]?.progress || 0
+  // Use the official progress value
+  const currentProgress = goal.tracking.progress || 0
   const target = goal.tracking.target?.value || 0
   const daysPassed = differenceInDays(today, yearStart)
   const totalDays = differenceInDays(yearEnd, yearStart)
   const percentOfYearPassed = daysPassed / totalDays
   const projectedValue = (currentProgress / percentOfYearPassed) || 0
 
+  // Calculate monthly progress based on countHistory for visualization
+  const monthlyData = allMonths.map(month => {
+    const monthStr = format(month, 'yyyy-MM')
+    const monthlyEntries = goal.tracking.countHistory
+      ?.filter(entry => entry.date.startsWith(monthStr))
+    
+    if (!monthlyEntries?.length) return 0
+    return monthlyEntries.reduce((sum, entry) => sum + entry.value, 0)
+  })
+
+  // Ensure the sum matches the official progress
+  const totalFromMonths = monthlyData.reduce((sum, val) => sum + val, 0)
+  const scaleFactor = totalFromMonths > 0 ? currentProgress / totalFromMonths : 1
+
+  // Scale monthly values to match the official progress
+  const scaledMonthlyData = monthlyData.map(val => val * scaleFactor)
+
+  // Calculate cumulative progress
+  const actualProgress = scaledMonthlyData.map((_, index) => 
+    scaledMonthlyData.slice(0, index + 1).reduce((sum, val) => sum + val, 0)
+  )
+
   const projectedData = allMonths.map((month, index) => {
     // Use actual data for past months
     if (month <= today) {
-      return actualProgress[index].progress
+      return actualProgress[index]
     }
 
     // For future months, calculate based on projected annual total
@@ -114,8 +118,8 @@ export default function MonthlyProgressChart({ goal }: { goal: Goal }) {
     datasets: [
       {
         label: 'Actual Progress',
-        data: actualProgress.map((m, i) => 
-          allMonths[i] <= today ? m.progress : null
+        data: actualProgress.map((progress, i) => 
+          allMonths[i] <= today ? progress : null
         ),
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.5)',

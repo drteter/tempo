@@ -24,7 +24,7 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
     relationship: '>=',
     timeframe: 'quarterly' as typeof TIMEFRAMES[number],
     unit: '' as typeof UNITS[number],
-    linkedGoalId: ''
+    parentGoalId: ''
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -47,7 +47,10 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
           value: parseFloat(formData.threshold),
           unit: formData.unit
         }
-      }
+      },
+      parentGoalId: formData.parentGoalId || undefined,
+      status: 'not_started',
+      trackingType: 'count'
     })
     
     onClose()
@@ -58,7 +61,7 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
       relationship: '>=',
       timeframe: 'quarterly',
       unit: '',
-      linkedGoalId: ''
+      parentGoalId: ''
     })
   }
 
@@ -216,10 +219,10 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
                         <label className="block text-sm font-medium">Link to Lifetime Goal (Optional)</label>
                         <select
                           className="w-full px-3 py-2 border rounded"
-                          value={formData.linkedGoalId}
+                          value={formData.parentGoalId}
                           onChange={(e) => setFormData(prev => ({
                             ...prev,
-                            linkedGoalId: e.target.value
+                            parentGoalId: e.target.value
                           }))}
                         >
                           <option value="">None</option>

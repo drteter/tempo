@@ -20,7 +20,7 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
     daysPerWeek: editGoal?.daysPerWeek || 1,
     status: editGoal?.status || 'not_started' as const,
     target: editGoal?.tracking.target || { value: 0, unit: '' },
-    linkedGoalId: editGoal?.linkedGoalId || '',
+    parentGoalId: editGoal?.parentGoalId || '',
     trackingType: editGoal?.trackingType || 'boolean' as const
   })
 
@@ -30,11 +30,14 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
     const goalData = {
       ...formData,
       tracking: {
+        ...editGoal?.tracking,
         scheduledDays: editGoal?.tracking.scheduledDays || [],
         completedDates: editGoal?.tracking.completedDates || [],
         target: formData.target,
-        progress: editGoal?.tracking.progress || 0
-      }
+        progress: editGoal?.tracking.progress || 0,
+        countHistory: editGoal?.tracking.countHistory || []
+      },
+      parentGoalId: formData.parentGoalId || undefined
     }
     
     if (editGoal) {
@@ -112,10 +115,10 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
               <label className="block text-sm font-medium">Link to Parent Goal (Optional)</label>
               <select
                 className="w-full rounded-md border p-2"
-                value={formData.linkedGoalId}
+                value={formData.parentGoalId}
                 onChange={(e) => setFormData(prev => ({
                   ...prev,
-                  linkedGoalId: e.target.value
+                  parentGoalId: e.target.value
                 }))}
               >
                 <option value="">None</option>
