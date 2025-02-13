@@ -17,15 +17,15 @@ function AnnualProgressCard() {
     const percentOfYearPassed = daysPassed / totalDays
 
     if (goal.trackingType === 'count') {
-      const currentProgress = goal.tracking.progress || 0
+      const currentProgress = goal.tracking.countHistory?.reduce((sum: number, entry: { value: number }) => sum + entry.value, 0) || 0
       const target = goal.tracking.target?.value || 0
       const projectedValue = (currentProgress / percentOfYearPassed) || 0
       const percentComplete = (currentProgress / target) * 100
       const projectedPercent = (projectedValue / target) * 100
 
       return {
-        percentComplete: Math.min(percentComplete, 100),
-        projectedPercent: Math.min(projectedPercent, 100),
+        percentComplete,
+        projectedPercent,
         currentValue: currentProgress,
         projectedValue: Math.round(projectedValue),
         target,
@@ -56,7 +56,8 @@ function AnnualProgressCard() {
   }
 
   const formatValue = (value: number, unit: string) => {
-    return `${value} ${unit}`
+    const formatter = new Intl.NumberFormat('en-US')
+    return `${formatter.format(value)} ${unit}`
   }
 
   return (

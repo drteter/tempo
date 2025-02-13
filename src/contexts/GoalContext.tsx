@@ -57,11 +57,11 @@ type GoalProgress = {
   unit: string
 }
 
-type GoalContextType = {
+export type GoalContextType = {
   goals: Goal[]
-  addGoal: (goal: Omit<Goal, 'id' | 'status'>) => void
-  updateGoal: (goal: Goal) => void
-  deleteGoal: (id: string) => void
+  addGoal: (goal: Omit<Goal, 'id'>) => Promise<void>
+  updateGoal: (goal: Goal) => Promise<void>
+  deleteGoal: (id: string) => Promise<void>
   getGoalsByTimeHorizon: (timeHorizon: TimeHorizon) => Goal[]
   toggleRoutineCompletion: (goalId: string, date: string) => void
   updateScheduledDays: (goalId: string, days: number[]) => void
@@ -70,6 +70,7 @@ type GoalContextType = {
   processWeekTransition: () => void  // Called on app load to handle week transitions
   updateGoalProgress: (goalId: string, amount: number, date: string) => void
   checkGoalCompletion: (goal: Goal, date: string) => boolean
+  recalculateAllGoalsProgress: () => Promise<void>
 }
 
 export const GoalContext = createContext<GoalContextType | undefined>(undefined)
@@ -217,6 +218,30 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     return false
   }
 
+  const recalculateAllGoalsProgress = async () => {
+    console.log('Starting recalculation...')
+    for (const goal of goals) {
+      if (goal.trackingType === 'count' && goal.tracking.countHistory) {
+        const totalProgress = goal.tracking.countHistory.reduce(
+          (sum, entry) => sum + entry.value, 
+          0
+        )
+        
+        console.log(`Goal ${goal.id}: current=${goal.tracking.progress}, calculated=${totalProgress}`)
+        
+        if (totalProgress !== goal.tracking.progress) {
+          await dbUpdateGoal({
+            ...goal,
+            tracking: {
+              ...goal.tracking,
+              progress: totalProgress
+            }
+          })
+        }
+      }
+    }
+  }
+
   return (
     <GoalContext.Provider 
       value={{ 
@@ -231,7 +256,8 @@ export function GoalProvider({ children }: { children: ReactNode }) {
         setWeekSchedule,
         processWeekTransition,
         updateGoalProgress,
-        checkGoalCompletion
+        checkGoalCompletion,
+        recalculateAllGoalsProgress
       }}
     >
       {children}

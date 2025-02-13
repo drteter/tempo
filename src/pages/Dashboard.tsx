@@ -3,7 +3,7 @@ import { useHabits } from '../contexts/HabitContext'
 import { useCategories } from '../contexts/CategoryContext'
 import type { Habit } from '../contexts/HabitContext'
 import CompletionModal from '../components/CompletionModal'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AnnualProgressCard from '../components/AnnualProgressCard'
 import { useNavigate } from 'react-router-dom'
 
@@ -59,10 +59,23 @@ function HabitItem({ habit }: { habit: Habit }) {
 function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, date: string) => void }) {
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const navigate = useNavigate()
+  const { categories } = useCategories()
   const today = new Date()
   const todayString = today.toISOString().split('T')[0]
   const categoryIcon = getCategoryIcon(goal.category)
   const isCompletedToday = goal.tracking.completedDates.includes(todayString)
+
+  const formatValue = (value: number, unit: string) => {
+    const formatter = new Intl.NumberFormat('en-US')
+    return `${formatter.format(value)} ${unit}`
+  }
+
+  const getCurrentProgress = (goal: any) => {
+    if (goal.trackingType === 'count') {
+      return goal.tracking.progress || 0
+    }
+    return goal.tracking.completedDates?.length || 0
+  }
 
   const handleClick = () => {
     if (goal.trackingType === 'count') {
@@ -113,7 +126,7 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
             </p>
             {goal.trackingType === 'count' && goal.tracking.countHistory && (
               <p className={`text-xs mt-1 ${isCompletedToday ? 'text-white/80' : 'text-text-secondary'}`}>
-                Progress: {goal.tracking.progress || 0} {goal.tracking.target?.unit}
+                Progress: {formatValue(getCurrentProgress(goal), goal.tracking.target?.unit || '')}
               </p>
             )}
           </div>
@@ -152,9 +165,16 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
 }
 
 function Dashboard() {
-  const { goals, toggleRoutineCompletion } = useGoals()
+  const { goals, toggleRoutineCompletion, recalculateAllGoalsProgress } = useGoals()
   const { habits } = useHabits()
   
+  useEffect(() => {
+    console.log('Dashboard mounted, running recalculation...')
+    if (recalculateAllGoalsProgress) {
+      recalculateAllGoalsProgress()
+    }
+  }, [recalculateAllGoalsProgress])
+
   // Get today's habits and weekly goals based on scheduled days
   const todaysActivities = () => {
     const today = new Date()

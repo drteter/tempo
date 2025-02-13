@@ -35,24 +35,22 @@ export default function CompletionModal({ isOpen, onClose, goal, date }: Complet
   }
 
   const handleDelete = async () => {
-    // Remove from countHistory and completedDates
+    // Remove the entry completely from countHistory instead of setting to 0
     const newCountHistory = (goal.tracking.countHistory || []).filter(h => h.date !== date)
-    const newCompletedDates = goal.tracking.completedDates.filter(d => d !== date)
-
-    // Recalculate total progress
+    
+    // Calculate new total progress
     const totalProgress = newCountHistory.reduce((sum, entry) => sum + entry.value, 0)
 
-    // Update the goal
+    // Update the goal with all changes
     await updateGoal({
       ...goal,
       tracking: {
         ...goal.tracking,
         countHistory: newCountHistory,
         progress: totalProgress,
-        completedDates: newCompletedDates
+        completedDates: goal.tracking.completedDates.filter(d => d !== date)
       }
     })
-
     onClose()
     setValue('')
   }
