@@ -15,7 +15,7 @@ export default function AnnualGoals() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Annual Goals</h1>
-          <p className="text-text-secondary">Track your yearly objectives</p>
+          <p className="text-text-secondary">Priorities for the year</p>
         </div>
       </div>
 

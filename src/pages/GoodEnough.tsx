@@ -209,7 +209,7 @@ export default function GoodEnough() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-text-primary">Good Enough</h1>
-            <p className="text-text-secondary">Track your good enough thresholds</p>
+            <p className="text-text-secondary">Close enough for government work.</p>
           </div>
         </div>
 
@@ -382,7 +382,8 @@ export default function GoodEnough() {
                                 goalId={goal.id} 
                                 onProgressUpdate={(amount: number) => {
                                   if (goal.linkedGoalId) {
-                                    updateGoalProgress(goal.linkedGoalId, amount)
+                                    const today = new Date().toISOString().split('T')[0]
+                                    updateGoalProgress(goal.linkedGoalId, amount, today)
                                   }
                                 }}
                               />

@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar'
 import AddGoalButton from './components/AddGoalButton'
 import Dashboard from './pages/Dashboard'
 import WeeklyPlan from './pages/WeeklyPlan'
-import QuarterlyBaseline from './pages/QuarterlyBaseline'
 import AnnualGoals from './pages/AnnualGoals'
 import LifetimeGoals from './pages/LifetimeGoals'
 import GoodEnough from './pages/GoodEnough'
@@ -20,11 +19,10 @@ function App() {
         <HabitProvider>
           <div className="flex min-h-screen">
             <Sidebar />
-            <main className="flex-1 p-8">
+            <main className="flex-1 pl-64 p-8">
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/weekly" element={<WeeklyPlan />} />
-                <Route path="/quarterly" element={<QuarterlyBaseline />} />
                 <Route path="/good-enough" element={<GoodEnough />} />
                 <Route path="/annual" element={<AnnualGoals />} />
                 <Route path="/lifetime" element={<LifetimeGoals />} />

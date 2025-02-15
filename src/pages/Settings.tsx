@@ -35,8 +35,7 @@ function Settings() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
-          <p className="text-text-secondary">Manage your goals</p>
-        </div>
+                </div>
       </div>
 
       <div className="space-y-6">

@@ -177,6 +177,146 @@ function GoalItem({ goal, onComplete }: { goal: any, onComplete: (id: string, da
   )
 }
 
+function WeeklyProgressCard() {
+  const { goals, checkGoalCompletion } = useGoals()
+  const { habits } = useHabits()
+  const today = new Date()
+  
+  const getWeekProgress = () => {
+    const startOfWeek = new Date(today)
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1) // Monday
+    const todayStr = today.toISOString().split('T')[0]
+    
+    let scheduled = 0
+    let completed = 0
+    
+    // Check each day up to today
+    for (let d = new Date(startOfWeek); d <= today; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0]
+      const dayOfWeek = d.getDay() === 0 ? 6 : d.getDay() - 1 // Convert to Monday-based
+
+      // Count scheduled habits
+      habits.forEach(habit => {
+        if (habit.scheduledDays.includes(dayOfWeek)) {
+          scheduled++
+          if (habit.completedDates.includes(dateStr)) completed++
+        }
+      })
+
+      // Count scheduled goals
+      goals.forEach(goal => {
+        if (goal.timeHorizon === 'weekly' && goal.tracking.scheduledDays.includes(dayOfWeek)) {
+          scheduled++
+          // If trackingType is undefined or 'boolean', check completedDates
+          if (!goal.trackingType || goal.trackingType === 'boolean') {
+            if (goal.tracking.completedDates.includes(dateStr)) {
+              completed++
+            }
+          } else if (checkGoalCompletion(goal, dateStr)) {
+            completed++
+          }
+        }
+      })
+    }
+
+    return {
+      percentage: scheduled ? Math.round((completed / scheduled) * 100) : 0,
+      completed,
+      scheduled
+    }
+  }
+
+  const progress = getWeekProgress()
+
+  return (
+    <div className="card">
+      <h2 className="text-lg font-semibold mb-4">This Week's Progress</h2>
+      <div className="space-y-4">
+        <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+          <div 
+            className="absolute h-full bg-[#10B981] transition-all"
+            style={{ width: `${progress.percentage}%` }}
+          />
+        </div>
+        <p className="text-text-secondary">
+          Completed {progress.completed} of {progress.scheduled} scheduled activities ({progress.percentage}%)
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function WeeklyGoalProgress() {
+  const { goals, checkGoalCompletion } = useGoals()
+  const today = new Date()
+  
+  const getGoalProgress = (goal: any) => {
+    const startOfWeek = new Date(today)
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1)
+    
+    let scheduled = 0
+    let completed = 0
+    
+    for (let d = new Date(startOfWeek); d <= today; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0]
+      const dayOfWeek = d.getDay() === 0 ? 6 : d.getDay() - 1
+
+      if (goal.tracking.scheduledDays.includes(dayOfWeek)) {
+        scheduled++
+        // If trackingType is undefined or 'boolean', check completedDates
+        if (!goal.trackingType || goal.trackingType === 'boolean') {
+          if (goal.tracking.completedDates.includes(dateStr)) {
+            completed++
+          }
+        } else if (checkGoalCompletion(goal, dateStr)) {
+          completed++
+        }
+      }
+    }
+    
+    return { scheduled, completed }
+  }
+
+  const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
+
+  return (
+    <div className="card">
+      <h2 className="text-lg font-semibold mb-4">Weekly Goals Progress</h2>
+      <div className="space-y-4">
+        {weeklyGoals.map(goal => {
+          const progress = getGoalProgress(goal)
+          const percentage = progress.scheduled ? Math.round((progress.completed / progress.scheduled) * 100) : 0
+          const categoryIcon = getCategoryIcon(goal.category)
+
+          return (
+            <div key={goal.id} className="flex items-center space-x-4">
+              {categoryIcon && (
+                <div className="p-2 rounded-lg" style={{ backgroundColor: `${categoryIcon.color}20` }}>
+                  <categoryIcon.Icon className="h-5 w-5" style={{ color: categoryIcon.color }} />
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 className="font-medium text-text-primary">{goal.title}</h3>
+                  <span className="text-sm text-text-secondary">
+                    {progress.completed}/{progress.scheduled} ({percentage}%)
+                  </span>
+                </div>
+                <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute h-full bg-[#10B981] transition-all"
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function Dashboard() {
   const { goals, toggleRoutineCompletion, recalculateAllGoalsProgress } = useGoals()
   const { habits } = useHabits()
@@ -222,36 +362,41 @@ function Dashboard() {
   const { habits: todaysHabits, goals: todaysGoals } = todaysActivities()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto px-4">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         <p className="text-text-secondary mt-1">Track your progress and stay motivated.</p>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Today's Activities</h2>
-          <div className="space-y-4">
-            {todaysHabits.length > 0 || todaysGoals.length > 0 ? (
-              <>
-                {todaysHabits.map(habit => (
-                  <HabitItem key={habit.id} habit={habit} />
-                ))}
-                {todaysGoals.map(goal => (
-                  <GoalItem 
-                    key={goal.id} 
-                    goal={goal} 
-                    onComplete={toggleRoutineCompletion}
-                  />
-                ))}
-              </>
-            ) : (
-              <p className="text-text-secondary">No activities scheduled for today.</p>
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <WeeklyProgressCard />
+          <WeeklyGoalProgress />
+          <div className="card">
+            <h2 className="text-lg font-semibold mb-4">Today's Activities</h2>
+            <div className="space-y-4">
+              {todaysHabits.length > 0 || todaysGoals.length > 0 ? (
+                <>
+                  {todaysHabits.map(habit => (
+                    <HabitItem key={habit.id} habit={habit} />
+                  ))}
+                  {todaysGoals.map(goal => (
+                    <GoalItem 
+                      key={goal.id} 
+                      goal={goal} 
+                      onComplete={toggleRoutineCompletion}
+                    />
+                  ))}
+                </>
+              ) : (
+                <p className="text-text-secondary">No activities scheduled for today.</p>
+              )}
+            </div>
           </div>
         </div>
-
-        <AnnualProgressCard />
+        <div className="lg:sticky lg:top-6">
+          <AnnualProgressCard />
+        </div>
       </div>
     </div>
   )
