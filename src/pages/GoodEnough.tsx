@@ -1,7 +1,7 @@
 import { HandThumbUpIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { useGoals } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useEffect } from 'react'
 import GoodEnoughModal from '../components/GoodEnoughModal'
 import GoalProgress from '../components/GoalProgress'
 
@@ -128,8 +128,20 @@ function formatValue(value: number | undefined, unit: string | undefined): strin
 }
 
 export default function GoodEnough() {
-  const { goals, updateGoal, updateGoalProgress } = useGoals()
+  const { goals, updateGoal, updateGoalProgress, syncGoalHistories, recalculateAllGoalsProgress } = useGoals()
   const { categories } = useCategories()
+  const [refreshKey, setRefreshKey] = useState(0) // Add refresh key for forcing re-renders
+  
+  // Debug log for goals
+  useEffect(() => {
+    console.log('Goals updated:', goals.map(g => ({
+      id: g.id,
+      title: g.title,
+      type: g.type,
+      quarterlyValues: g.tracking.quarterlyValues
+    })))
+  }, [goals])
+  
   const goodEnoughGoals = goals.filter(goal => goal.type === 'good_enough')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingValue, setEditingValue] = useState<{
@@ -140,29 +152,103 @@ export default function GoodEnough() {
   const [newValue, setNewValue] = useState('')
   const [showAllYears, setShowAllYears] = useState(false)
 
-  const handleValueSubmit = (e: React.FormEvent) => {
+  const handleValueSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingValue || !newValue) return
-
-    const goal = goals.find(g => g.id === editingValue.goalId)
-    if (!goal) return
-
-    const quarterKey = getQuarterKey(editingValue.quarter, editingValue.year)
-    const updatedGoal = {
-      ...goal,
-      tracking: {
-        ...goal.tracking,
-        quarterlyValues: {
-          ...goal.tracking.quarterlyValues,
-          [quarterKey]: parseFloat(newValue)
-        }
-      }
+    console.log('handleValueSubmit called with:', { editingValue, newValue })
+    
+    if (!editingValue || !newValue) {
+      console.log('Missing required values:', { editingValue, newValue })
+      return
     }
 
-    updateGoal(updatedGoal)
-    setEditingValue(null)
-    setNewValue('')
+    const goal = goals.find(g => g.id === editingValue.goalId)
+    if (!goal) {
+      console.error('Goal not found:', editingValue.goalId)
+      return
+    }
+
+    const quarterKey = getQuarterKey(editingValue.quarter, editingValue.year)
+    const value = parseFloat(newValue)
+    
+    console.log('Submitting value:', {
+      goalId: editingValue.goalId,
+      goalTitle: goal.title,
+      goalType: goal.type,
+      quarterKey,
+      value,
+      currentQuarterlyValues: goal.tracking.quarterlyValues
+    })
+    
+    try {
+      // Create new quarterly values
+      const newQuarterlyValues = {
+        ...(goal.tracking.quarterlyValues || {}),
+        [quarterKey]: value
+      }
+      
+      // Calculate total progress
+      const totalProgress = Object.values(newQuarterlyValues).reduce((sum, val) => sum + val, 0)
+      
+      // Create updated goal with new values
+      const updatedGoal = {
+        ...goal,
+        type: 'good_enough' as const,
+        tracking: {
+          ...goal.tracking,
+          quarterlyValues: newQuarterlyValues,
+          progress: totalProgress,
+          countHistory: Object.entries(newQuarterlyValues).map(([quarter, val]) => ({
+            date: quarter.replace(' ', '-'),
+            value: val
+          })).sort((a, b) => a.date.localeCompare(b.date))
+        }
+      }
+
+      // Update the goal
+      await updateGoal(updatedGoal)
+      
+      // If there's a parent goal, update it as well
+      if (goal.parentGoalId) {
+        const parentGoal = goals.find(g => g.id === goal.parentGoalId)
+        if (parentGoal) {
+          const updatedParent = {
+            ...parentGoal,
+            tracking: {
+              ...parentGoal.tracking,
+              quarterlyValues: newQuarterlyValues,
+              progress: totalProgress,
+              countHistory: updatedGoal.tracking.countHistory
+            }
+          }
+          await updateGoal(updatedParent)
+        }
+      }
+
+      // Clear form state
+      setEditingValue(null)
+      setNewValue('')
+      
+      // Force a refresh of the component
+      setRefreshKey(prev => prev + 1)
+      
+    } catch (error) {
+      console.error('Error updating goal:', error)
+    }
   }
+
+  // Sync goals on mount and after updates
+  useEffect(() => {
+    const syncGoals = async () => {
+      try {
+        await syncGoalHistories()
+        setRefreshKey(prev => prev + 1) // Force a refresh after sync
+      } catch (error) {
+        console.error('Error syncing goals:', error)
+      }
+    }
+    
+    syncGoals()
+  }, []) // Only run on mount
 
   // Get quarters from 2021 to current
   const { quarter: currentQuarter, year: currentYear } = getCurrentQuarter()
@@ -247,150 +333,104 @@ export default function GoodEnough() {
                             transition-transform hover:scale-110
                             text-lg leading-none
                           `}
-                          aria-label={showAllYears ? 'Show less years' : 'Show more years'}
                         >
-                          <span className="relative top-[-1px]">
-                            {showAllYears ? '\u203A' : '\u2039'}
-                          </span>
+                          {showAllYears ? '−' : '+'}
                         </button>
                       </div>
                     )}
                   </th>
-                  {Array.from(new Set(quarters.map(q => q.year))).map((year, yearIndex) => {
-                    const yearQuarters = quarters.filter(q => q.year === year)
-                    return (
-                      <th
-                        key={year}
-                        colSpan={yearQuarters.length}
-                        className={`text-center px-4 pb-1 ${
-                          yearIndex > 0 ? 'border-l-2 border-gray-200' : ''
-                        }`}
-                      >
-                        <div className="text-lg font-bold text-gray-700">{year}</div>
-                      </th>
-                    )
-                  })}
-                </tr>
-                <tr className="border-b border-gray-200">
-                  {quarters.map(({ quarter, year }, index) => (
-                    <th 
-                      key={`${quarter}-${year}`} 
-                      className={`text-center px-4 py-0.5 text-sm text-gray-500 ${
-                        index > 0 && quarters[index - 1].year !== year ? 'border-l-2 border-gray-200' : ''
-                      }`}
+                  {quarters.map(({ quarter, year }) => (
+                    <th
+                      key={`${quarter}-${year}`}
+                      className="text-center px-2 py-1 border-l"
+                      colSpan={1}
                     >
-                      {quarter}
+                      {quarter} {year}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(goalsByCategory).map(([categoryName, { goals: categoryGoals, icon: Icon, color }], categoryIndex) => (
-                  <Fragment key={categoryName}>
-                    <tr>
-                      <td 
-                        className={`px-4 py-1.5 bg-gray-50 sticky left-0 ${categoryIndex > 0 ? 'border-t' : ''}`}
+                {Object.entries(goalsByCategory).map(([category, { goals: categoryGoals, icon: Icon, color }]) => (
+                  <Fragment key={category}>
+                    <tr className="bg-gray-50">
+                      <td
+                        className="sticky left-0 bg-gray-50 px-4 py-2 font-medium z-10 flex items-center gap-2"
+                        colSpan={quarters.length + 1}
                       >
-                        <div className="text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-2">
-                            <div 
-                              className="p-1.5 rounded-lg"
-                              style={{ backgroundColor: `${color}20` }}
-                            >
-                              <Icon 
-                                className="h-4 w-4"
-                                style={{ color }}
-                              />
-                            </div>
-                            <span className="font-semibold text-text-primary">{categoryName}</span>
-                          </div>
-                        </div>
+                        <Icon className="h-5 w-5" style={{ color }} />
+                        {category}
                       </td>
-                      <td 
-                        colSpan={quarters.length}
-                        className={`bg-gray-50 ${categoryIndex > 0 ? 'border-t' : ''}`}
-                      />
                     </tr>
                     {categoryGoals.map(goal => (
-                      <Fragment key={goal.id}>
-                        <tr className="border-t">
-                          <td className="px-4 py-1.5 sticky left-0 bg-white">
-                            <div className="text-right whitespace-nowrap">
-                              <div className="font-medium">{goal.title}</div>
-                              <div className="text-xs italic text-gray-500">
-                                {goal.relationship} {formatValue(goal.threshold, goal.unit)}
+                      <tr key={goal.id} className="border-t">
+                        <td className="sticky left-0 bg-white px-4 py-2 text-right z-10 flex items-center justify-end gap-2">
+                          <span>{goal.title}</span>
+                          <button
+                            onClick={() => {
+                              const currentQuarter = getCurrentQuarter()
+                              console.log('Edit button clicked:', {
+                                goalId: goal.id,
+                                quarter: currentQuarter.quarter,
+                                year: currentQuarter.year
+                              })
+                              setEditingValue({
+                                goalId: goal.id,
+                                quarter: currentQuarter.quarter,
+                                year: currentQuarter.year
+                              })
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                        </td>
+                        {quarters.map(({ quarter, year }) => {
+                          const quarterKey = getQuarterKey(quarter, year)
+                          const value = goal.tracking.quarterlyValues?.[quarterKey]
+                          const statusColor = getStatusColor(
+                            value,
+                            goal.threshold || 0,
+                            goal.relationship || '>=',
+                            goal.timeframe,
+                            goal.tracking.quarterlyValues,
+                            quarter,
+                            year
+                          )
+                          
+                          return (
+                            <td
+                              key={quarterKey}
+                              className={`text-center px-2 py-2 border-l ${statusColor}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="flex-grow">
+                                  {goal.tracking.quarterlyValues?.[quarterKey] !== undefined
+                                    ? formatValue(goal.tracking.quarterlyValues[quarterKey], goal.unit)
+                                    : '-'}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    console.log('Edit button clicked:', {
+                                      goalId: goal.id,
+                                      quarter: quarter,
+                                      year: year
+                                    })
+                                    setEditingValue({
+                                      goalId: goal.id,
+                                      quarter: quarter,
+                                      year: year
+                                    })
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-gray-600"
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
                               </div>
-                            </div>
-                          </td>
-                          {quarters.map(({ quarter, year }, index) => {
-                            const quarterKey = getQuarterKey(quarter, year)
-                            const value = goal.tracking.quarterlyValues?.[quarterKey]
-                            const isEditing = editingValue?.goalId === goal.id && 
-                                           editingValue.quarter === quarter && 
-                                           editingValue.year === year
-
-                            return (
-                              <td 
-                                key={quarterKey} 
-                                className={`px-4 py-1.5 ${
-                                  index > 0 && quarters[index - 1].year !== year ? 'border-l-2 border-gray-200' : ''
-                                }`}
-                              >
-                                {isEditing ? (
-                                  <form onSubmit={handleValueSubmit} className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      value={newValue}
-                                      onChange={(e) => setNewValue(e.target.value)}
-                                      className="w-20 rounded-md border border-gray-300 px-2 py-1"
-                                      autoFocus
-                                    />
-                                    <button type="submit" className="text-primary hover:text-primary/80">
-                                      Save
-                                    </button>
-                                  </form>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      setEditingValue({ goalId: goal.id, quarter, year })
-                                      setNewValue(value?.toString() || '')
-                                    }}
-                                    className={`w-full px-3 py-1 rounded-full text-sm ${getStatusColor(
-                                      value, 
-                                      goal.threshold || 0, 
-                                      goal.relationship || '>=',
-                                      goal.timeframe,
-                                      goal.tracking.quarterlyValues,
-                                      quarter,
-                                      year
-                                    )}`}
-                                  >
-                                    {value !== undefined ? formatValue(value, goal.unit) : (
-                                      <PencilIcon className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                )}
-                              </td>
-                            )
-                          })}
-                        </tr>
-                        <tr>
-                          <td className="px-4 py-1.5 sticky left-0 bg-white">
-                            <div className="text-right whitespace-nowrap">
-                              <GoalProgress 
-                                goalId={goal.id} 
-                                onProgressUpdate={(amount: number) => {
-                                  if (goal.linkedGoalId) {
-                                    const today = new Date().toISOString().split('T')[0]
-                                    updateGoalProgress(goal.linkedGoalId, amount, today)
-                                  }
-                                }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      </Fragment>
+                            </td>
+                          )
+                        })}
+                      </tr>
                     ))}
                   </Fragment>
                 ))}
@@ -399,11 +439,48 @@ export default function GoodEnough() {
           </div>
         </div>
       </div>
+      
+      {editingValue && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4">Update Value</h3>
+            <form onSubmit={handleValueSubmit}>
+              <input
+                type="number"
+                step="any"
+                value={newValue}
+                onChange={e => {
+                  console.log('Input changed:', e.target.value)
+                  setNewValue(e.target.value)
+                }}
+                className="w-full px-3 py-2 border rounded mb-4"
+                placeholder="Enter value"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingValue(null)
+                    setNewValue('')
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+                >
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      <GoodEnoughModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      <GoodEnoughModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
-} 
+}

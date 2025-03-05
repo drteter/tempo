@@ -46,7 +46,9 @@ export default function GoodEnoughModal({ isOpen, onClose }: GoodEnoughModalProp
         target: {
           value: parseFloat(formData.threshold),
           unit: formData.unit
-        }
+        },
+        countHistory: [],
+        progress: 0
       },
       parentGoalId: formData.parentGoalId || undefined,
       status: 'not_started',

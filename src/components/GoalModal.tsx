@@ -35,7 +35,8 @@ export default function GoalModal({ isOpen, onClose, editGoal }: GoalModalProps)
         completedDates: editGoal?.tracking.completedDates || [],
         target: formData.target,
         progress: editGoal?.tracking.progress || 0,
-        countHistory: editGoal?.tracking.countHistory || []
+        countHistory: editGoal?.tracking.countHistory || [],
+        quarterlyValues: editGoal?.tracking.quarterlyValues || {}
       },
       parentGoalId: formData.parentGoalId || undefined
     }

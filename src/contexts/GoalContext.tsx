@@ -1,5 +1,6 @@
 import { createContext, useContext, ReactNode } from 'react'
 import { useDatabase } from '../hooks/useDatabase'
+import { startOfWeek, subWeeks } from 'date-fns'
 
 export type TimeHorizon = 'weekly' | 'quarterly' | 'annual' | 'lifetime' | 'ongoing'
 
@@ -45,9 +46,12 @@ export type Goal = {
 }
 
 export type WeeklySchedule = {
-  weekStartDate: string  // ISO date string of week start
+  weekStartDate: string
   scheduledDays: {
-    [goalId: string]: number[]  // Maps goal IDs to their scheduled days
+    [goalId: string]: number[]
+  }
+  completedDates?: {
+    [goalId: string]: string[]
   }
 }
 
@@ -66,7 +70,7 @@ export type GoalContextType = {
   toggleRoutineCompletion: (goalId: string, date: string) => void
   updateScheduledDays: (goalId: string, days: number[]) => void
   weeklySchedules: WeeklySchedule[]
-  setWeekSchedule: (weekStartDate: string, goalId: string, days: number[]) => void
+  setWeekSchedule: (weekStartDate: string, goalId: string, days: number[]) => Promise<void>
   processWeekTransition: () => void  // Called on app load to handle week transitions
   updateGoalProgress: (goalId: string, amount: number, date: string) => void
   checkGoalCompletion: (goal: Goal, date: string) => boolean
@@ -113,45 +117,57 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   }
 
   const updateGoal = async (updatedGoal: Goal) => {
-    // If this goal has a parent or is a parent, make sure we preserve history
-    const relatedGoals = goals.filter(g => 
-      g.id === updatedGoal.parentGoalId || // Parent
-      g.parentGoalId === updatedGoal.id    // Children
-    )
+    console.log('🎯 Updating goal:', {
+      id: updatedGoal.id,
+      title: updatedGoal.title,
+      quarterlyValues: updatedGoal.tracking.quarterlyValues
+    })
 
-    // Get the most complete history from all related goals
-    let fullHistory = updatedGoal.tracking.countHistory || []
-    for (const relatedGoal of relatedGoals) {
-      if (relatedGoal.tracking.countHistory?.length) {
-        // If related goal has more history entries, use that
-        if (relatedGoal.tracking.countHistory.length > fullHistory.length) {
-          fullHistory = [...relatedGoal.tracking.countHistory]
-        }
-      }
-    }
-
-    // Update the goal with the complete history
-    const goalToUpdate = {
-      ...updatedGoal,
-      tracking: {
-        ...updatedGoal.tracking,
-        countHistory: fullHistory,
-        progress: fullHistory.reduce((sum, entry) => sum + entry.value, 0)
-      }
-    }
-
-    await dbUpdateGoal(goalToUpdate)
-
-    // Update all related goals with the same history
-    for (const relatedGoal of relatedGoals) {
-      await dbUpdateGoal({
-        ...relatedGoal,
+    // For good_enough goals, ensure we preserve quarterly values
+    if (updatedGoal.type === 'good_enough') {
+      const totalProgress = Object.values(updatedGoal.tracking.quarterlyValues || {}).reduce((sum, val) => sum + val, 0)
+      
+      const goalToUpdate = {
+        ...updatedGoal,
         tracking: {
-          ...relatedGoal.tracking,
-          countHistory: fullHistory,
-          progress: fullHistory.reduce((sum, entry) => sum + entry.value, 0)
+          ...updatedGoal.tracking,
+          progress: totalProgress,
+          quarterlyValues: updatedGoal.tracking.quarterlyValues,
+          countHistory: Object.entries(updatedGoal.tracking.quarterlyValues || {}).map(([quarter, value]) => ({
+            date: quarter.replace(' ', '-'),
+            value
+          })).sort((a, b) => a.date.localeCompare(b.date))
         }
+      }
+
+      console.log('📊 Goal to update:', {
+        id: goalToUpdate.id,
+        quarterlyValues: goalToUpdate.tracking.quarterlyValues,
+        progress: goalToUpdate.tracking.progress,
+        countHistory: goalToUpdate.tracking.countHistory
       })
+
+      // Update in database
+      await dbUpdateGoal(goalToUpdate)
+
+      // If this is a child goal, update its parent
+      if (goalToUpdate.parentGoalId) {
+        const parent = goals.find(g => g.id === goalToUpdate.parentGoalId)
+        if (parent) {
+          const updatedParent = {
+            ...parent,
+            tracking: {
+              ...parent.tracking,
+              quarterlyValues: goalToUpdate.tracking.quarterlyValues,
+              progress: totalProgress,
+              countHistory: goalToUpdate.tracking.countHistory
+            }
+          }
+          await dbUpdateGoal(updatedParent)
+        }
+      }
+    } else {
+      await dbUpdateGoal(updatedGoal)
     }
   }
 
@@ -186,9 +202,19 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   }
 
   const processWeekTransition = async () => {
-    // Move last week's schedule to history and reset current week
     const weeklyGoals = goals.filter(goal => goal.timeHorizon === 'weekly')
+    const today = new Date()
+    const lastWeekStart = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 })
+    const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0]
     
+    // Save each goal's schedule separately
+    for (const goal of weeklyGoals) {
+      if (goal.tracking.scheduledDays.length > 0) {
+        await setWeekSchedule(lastWeekStartStr, goal.id, [...goal.tracking.scheduledDays])
+      }
+    }
+    
+    // Clear current week's schedule
     for (const goal of weeklyGoals) {
       await dbUpdateGoal({
         ...goal,
@@ -201,6 +227,7 @@ export function GoalProvider({ children }: { children: ReactNode }) {
   }
 
   const setWeekSchedule = async (weekStartDate: string, goalId: string, days: number[]) => {
+    if (!weeklySchedules) return
     await dbSetWeekSchedule(weekStartDate, goalId, days)
   }
 
@@ -288,94 +315,51 @@ export function GoalProvider({ children }: { children: ReactNode }) {
     return false
   }
 
-  let lastRecalculationTime = 0
-
   const recalculateAllGoalsProgress = async () => {
-    // Don't recalculate if we've done it recently
-    const now = Date.now()
-    if (lastRecalculationTime && now - lastRecalculationTime < 1000) {
-      return
-    }
-    lastRecalculationTime = now
-
     console.log('Starting recalculation...')
     
-    // First, handle all goals with count history
+    // First, handle all goals with count history or quarterly values
     for (const goal of goals) {
-      if (goal.trackingType === 'count' && goal.tracking.countHistory) {
-        const totalProgress = goal.tracking.countHistory.reduce(
-          (sum, entry) => sum + entry.value, 
-          0
-        )
+      if (goal.type === 'good_enough' && goal.tracking.quarterlyValues) {
+        const totalProgress = Object.values(goal.tracking.quarterlyValues).reduce((sum, val) => sum + val, 0)
+        
+        const countHistory = Object.entries(goal.tracking.quarterlyValues).map(([quarter, value]) => ({
+          date: quarter.replace(' ', '-'),
+          value
+        })).sort((a, b) => a.date.localeCompare(b.date))
 
-        if (totalProgress !== goal.tracking.progress) {
-          await dbUpdateGoal({
-            ...goal,
-            tracking: {
-              ...goal.tracking,
-              progress: totalProgress
-            }
-          })
-        }
+        await dbUpdateGoal({
+          ...goal,
+          tracking: {
+            ...goal.tracking,
+            progress: totalProgress,
+            countHistory,
+            quarterlyValues: goal.tracking.quarterlyValues
+          }
+        })
       }
     }
-
-    // Then, sync histories between related goals
-    const goalPairs = goals.reduce((pairs, goal) => {
-      if (goal.parentGoalId) {
-        const parent = goals.find(g => g.id === goal.parentGoalId)
-        if (parent) {
-          pairs.push({ child: goal, parent })
-        }
-      }
-      return pairs
-    }, [] as { child: Goal, parent: Goal }[])
-
-    console.log('Found goal pairs:', goalPairs.map(pair => ({
-      childId: pair.child.id,
-      childTitle: pair.child.title,
-      parentId: pair.parent.id,
-      parentTitle: pair.parent.title
-    })))
-
-    // For each pair, ensure their histories match
-    for (const { child, parent } of goalPairs) {
-      if (child.trackingType === 'count' && child.tracking.countHistory) {
-        const history = [...child.tracking.countHistory].sort((a, b) => 
-          a.date.localeCompare(b.date)
-        )
-        const totalProgress = history.reduce((sum, entry) => sum + entry.value, 0)
-
-        // Only update if the histories or progress values are different
-        if (JSON.stringify(parent.tracking.countHistory) !== JSON.stringify(history) ||
-            parent.tracking.progress !== totalProgress) {
-          console.log(`Syncing pair ${child.id} -> ${parent.id}:`, {
-            historyLength: history.length,
-            totalProgress
-          })
-
-          await dbUpdateGoal({
-            ...parent,
-            tracking: {
-              ...parent.tracking,
-              countHistory: history,
-              progress: totalProgress
-            }
-          })
-        }
-      }
-    }
+    
+    console.log('Recalculation complete')
   }
 
   // Add this new function to sync histories
   const syncGoalHistories = async () => {
-    console.log('Starting history sync...')
+    console.log('🔄 Starting history sync...')
     
     // First, find all goal pairs
     const allPairs = goals.reduce((pairs, goal) => {
       if (goal.parentGoalId) {
         const parent = goals.find(g => g.id === goal.parentGoalId)
         if (parent) {
+          console.log(' Found goal pair:', {
+            childId: goal.id,
+            childTitle: goal.title,
+            childProgress: goal.tracking.progress,
+            parentId: parent.id,
+            parentTitle: parent.title,
+            parentProgress: parent.tracking.progress
+          })
           pairs.push({ child: goal, parent })
         }
       }
@@ -384,40 +368,33 @@ export function GoalProvider({ children }: { children: ReactNode }) {
 
     // For each pair, combine their histories
     for (const { child, parent } of allPairs) {
-      const childHistory = child.tracking.countHistory || []
-      const parentHistory = parent.tracking.countHistory || []
+      if (child.type === 'good_enough' && child.tracking.quarterlyValues) {
+        // For Good Enough goals, use quarterly values directly
+        const history = Object.entries(child.tracking.quarterlyValues).map(([quarter, value]) => ({
+          date: quarter.replace(' ', '-'),
+          value
+        })).sort((a, b) => a.date.localeCompare(b.date))
+        
+        const totalProgress = Object.values(child.tracking.quarterlyValues).reduce((sum, val) => sum + val, 0)
 
-      // Combine histories, removing duplicates
-      const combinedHistory = [...childHistory, ...parentHistory]
-        .reduce((unique, entry) => {
-          const exists = unique.find(e => e.date === entry.date)
-          if (!exists) {
-            unique.push(entry)
+        console.log('Updating parent with quarterly data:', {
+          childId: child.id,
+          parentId: parent.id,
+          historyLength: history.length,
+          totalProgress
+        })
+
+        // Update parent with quarterly data
+        await dbUpdateGoal({
+          ...parent,
+          tracking: {
+            ...parent.tracking,
+            countHistory: history,
+            progress: totalProgress,
+            quarterlyValues: child.tracking.quarterlyValues
           }
-          return unique
-        }, [] as typeof childHistory)
-        .sort((a, b) => a.date.localeCompare(b.date))
-
-      const totalProgress = combinedHistory.reduce((sum, entry) => sum + entry.value, 0)
-
-      // Update both goals with the combined history
-      await dbUpdateGoal({
-        ...child,
-        tracking: {
-          ...child.tracking,
-          countHistory: combinedHistory,
-          progress: totalProgress
-        }
-      })
-
-      await dbUpdateGoal({
-        ...parent,
-        tracking: {
-          ...parent.tracking,
-          countHistory: combinedHistory,
-          progress: totalProgress
-        }
-      })
+        })
+      }
     }
 
     console.log('History sync complete')

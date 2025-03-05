@@ -38,7 +38,5 @@ Detailed specifications can be found in the `/docs` directory:
 - Supabase hosting (included) for backend
 
 ## Issues
-- Add habit completion history view
-- Add weekly habit completion stats
 - Add habit reminders/notifications
 - Add habit categories and filtering

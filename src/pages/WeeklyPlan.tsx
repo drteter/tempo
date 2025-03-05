@@ -55,7 +55,18 @@ export default function WeeklyPlan() {
   }, [processWeekTransition])
 
   const getSchedulingStatus = (goal: Goal) => {
-    const scheduledCount = goal.tracking.scheduledDays.length
+    let scheduledCount = 0;
+    
+    if (isNextWeek) {
+      const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
+      const nextWeekSchedule = weeklySchedules.find((schedule: WeeklySchedule) => 
+        schedule.weekStartDate === nextWeekStart
+      )
+      scheduledCount = nextWeekSchedule?.scheduledDays[goal.id]?.length || 0
+    } else {
+      scheduledCount = goal.tracking.scheduledDays.length
+    }
+
     const targetCount = goal.daysPerWeek || 0
     const isOnTrack = scheduledCount >= targetCount
 
@@ -73,7 +84,8 @@ export default function WeeklyPlan() {
         ...goal,
         tracking: {
           ...goal.tracking,
-          scheduledDays: []
+          scheduledDays: [],
+          completedDates: []
         }
       }))
     }
@@ -85,13 +97,20 @@ export default function WeeklyPlan() {
         schedule.weekStartDate === nextWeekStart
       )
       
-      return weeklyGoals.map(goal => ({
-        ...goal,
-        tracking: {
+      return weeklyGoals.map(goal => {
+        // Create a fresh tracking object for next week
+        const nextWeekTracking = {
           ...goal.tracking,
-          scheduledDays: nextWeekSchedule?.scheduledDays[goal.id] || []
+          scheduledDays: nextWeekSchedule?.scheduledDays[goal.id] || [],
+          completedDates: [], // Always empty for next week
+          countHistory: [] // Reset count history for next week
         }
-      }))
+
+        return {
+          ...goal,
+          tracking: nextWeekTracking
+        }
+      })
     }
 
     // For current week (isThisWeek), use actual goal schedules
@@ -104,7 +123,8 @@ export default function WeeklyPlan() {
       ...goal,
       tracking: {
         ...goal.tracking,
-        scheduledDays: []
+        scheduledDays: [],
+        completedDates: []
       }
     }))
   }
@@ -157,7 +177,13 @@ export default function WeeklyPlan() {
 
         if (isNextWeek) {
           const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
-          await setWeekSchedule(nextWeekStart, id, [...goal.tracking.scheduledDays, dayValue].sort())
+          const nextWeekSchedule = weeklySchedules.find((schedule: WeeklySchedule) => 
+            schedule.weekStartDate === nextWeekStart
+          )
+          // Get current scheduled days and add the new one
+          const currentScheduledDays = nextWeekSchedule?.scheduledDays[id] || []
+          const newDays = [...currentScheduledDays, dayValue].sort()
+          await setWeekSchedule(nextWeekStart, id, newDays)
         } else {
           const currentDays = goal.tracking.scheduledDays
           if (!currentDays.includes(dayValue)) {
@@ -169,9 +195,13 @@ export default function WeeklyPlan() {
         const habit = habits.find(h => h.id === id)
         if (!habit) return
 
+        // Convert from Monday-based to Sunday-based index for habits
+        const sundayBasedDay = (dayValue + 6) % 7
+        
+        // Add to existing scheduled days
         const newScheduledDays = [...habit.scheduledDays]
-        if (!newScheduledDays.includes(dayValue)) {
-          newScheduledDays.push(dayValue)
+        if (!newScheduledDays.includes(sundayBasedDay)) {
+          newScheduledDays.push(sundayBasedDay)
           await updateHabit({
             ...habit,
             scheduledDays: newScheduledDays.sort()
@@ -192,7 +222,13 @@ export default function WeeklyPlan() {
 
       if (isNextWeek) {
         const nextWeekStart = startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }).toISOString().split('T')[0]
-        const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)
+        const nextWeekSchedule = weeklySchedules.find((schedule: WeeklySchedule) => 
+          schedule.weekStartDate === nextWeekStart
+        )
+        // Get the current scheduled days for next week only
+        const currentScheduledDays = nextWeekSchedule?.scheduledDays[id] || []
+        // Remove the specific day
+        const newDays = currentScheduledDays.filter(d => d !== dayValue)
         await setWeekSchedule(nextWeekStart, id, newDays)
       } else {
         const newDays = goal.tracking.scheduledDays.filter(d => d !== dayValue)

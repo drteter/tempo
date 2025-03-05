@@ -1,8 +1,10 @@
 import { SparklesIcon } from '@heroicons/react/24/outline'
 import { useGoals } from '../contexts/GoalContext'
+import { useNavigate } from 'react-router-dom'
 
 export default function LifetimeGoals() {
   const { goals } = useGoals()
+  const navigate = useNavigate()
   const lifetimeGoals = goals.filter(goal => goal.timeHorizon === 'lifetime')
 
   return (
@@ -23,8 +25,12 @@ export default function LifetimeGoals() {
           {lifetimeGoals.length > 0 ? (
             <div className="space-y-4">
               {lifetimeGoals.map(goal => (
-                <div key={goal.id} className="p-4 border rounded-lg">
-                  <h3 className="font-medium">{goal.title}</h3>
+                <div 
+                  key={goal.id} 
+                  onClick={() => navigate(`/goals/${goal.id}`)}
+                  className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <h3 className="font-medium hover:text-primary">{goal.title}</h3>
                   <p className="text-sm text-text-secondary">{goal.description}</p>
                 </div>
               ))}

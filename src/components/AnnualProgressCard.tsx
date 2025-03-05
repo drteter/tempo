@@ -1,10 +1,12 @@
 import { useGoals } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { differenceInDays } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 
 function AnnualProgressCard() {
   const { goals } = useGoals()
   const { categories } = useCategories()
+  const navigate = useNavigate()
   const annualGoals = goals.filter(goal => goal.timeHorizon === 'annual')
 
   const calculateProjection = (goal: any) => {
@@ -70,7 +72,10 @@ function AnnualProgressCard() {
 
           return (
             <div key={goal.id} className="space-y-2">
-              <div className="flex items-center gap-2">
+              <div 
+                className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg"
+                onClick={() => navigate(`/goals/${goal.id}`)}
+              >
                 {categoryIcon && (
                   <div 
                     className="p-1.5 rounded-lg"
@@ -82,7 +87,7 @@ function AnnualProgressCard() {
                     />
                   </div>
                 )}
-                <h3 className="font-medium text-text-primary">{goal.title}</h3>
+                <h3 className="font-medium text-text-primary hover:text-primary">{goal.title}</h3>
               </div>
               
               <div className="space-y-1">
