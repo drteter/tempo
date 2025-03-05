@@ -10,7 +10,7 @@ type CompletionModalProps = {
 }
 
 export default function CompletionModal({ isOpen, onClose, goal, date }: CompletionModalProps) {
-  const { updateGoal, updateGoalProgress, recalculateAllGoalsProgress } = useGoals()
+  const {updateGoalProgress, recalculateAllGoalsProgress } = useGoals()
   const [value, setValue] = useState('')
 
   // Get existing value when modal opens or when date/goal changes

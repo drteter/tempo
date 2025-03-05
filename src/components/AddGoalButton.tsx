@@ -1,16 +1,9 @@
 import { useState } from 'react'
 import { PlusIcon } from '@heroicons/react/24/outline'
-import { useLocation } from 'react-router-dom'
 import GoalModal from './GoalModal'
 
 export default function AddGoalButton() {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const location = useLocation()
-
-  // Hide on the Good Enough page
-  if (location.pathname === '/good-enough') {
-    return null
-  }
 
   return (
     <>

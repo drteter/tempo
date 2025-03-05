@@ -1,8 +1,7 @@
-import { HandThumbUpIcon, PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { HandThumbUpIcon, PencilIcon } from '@heroicons/react/24/outline'
 import { useGoals } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState, Fragment, useEffect } from 'react'
-import GoodEnoughModal from '../components/GoodEnoughModal'
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
@@ -141,7 +140,6 @@ export default function GoodEnough() {
   }, [goals])
   
   const goodEnoughGoals = goals.filter(goal => goal.type === 'good_enough')
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingValue, setEditingValue] = useState<{
     goalId: string
     quarter: Quarter
@@ -285,7 +283,7 @@ export default function GoodEnough() {
   }, {} as Record<string, { goals: typeof goodEnoughGoals, icon: any, color: string }>)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" key={refreshKey}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -296,14 +294,6 @@ export default function GoodEnough() {
             <p className="text-text-secondary">Close enough for government work.</p>
           </div>
         </div>
-
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <PlusIcon className="h-5 w-5" />
-          Add Good Enough Goal
-        </button>
       </div>
 
       <div className="flex justify-center">
@@ -477,8 +467,6 @@ export default function GoodEnough() {
           </div>
         </div>
       )}
-
-      <GoodEnoughModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
 }
