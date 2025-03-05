@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Goal, useGoals } from '../contexts/GoalContext'
 import CompletionModal from '../components/CompletionModal'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, differenceInDays, startOfWeek, subWeeks } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, startOfWeek, subWeeks } from 'date-fns'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import MonthlyProgressChart from '../components/MonthlyProgressChart'
 
 // Add calculateProjection function
 const calculateProjection = (goal: Goal) => {
-  const now = new Date()
   
   // For lifetime goals with quarterly values
   if (goal.timeHorizon === 'lifetime' && goal.type === 'good_enough') {
@@ -18,9 +17,7 @@ const calculateProjection = (goal: Goal) => {
 
     return {
       percentComplete,
-      projectedPercent: percentComplete,
       currentValue: currentProgress,
-      projectedValue: currentProgress,
       target,
       unit: goal.unit || ''
     }
@@ -35,9 +32,7 @@ const calculateProjection = (goal: Goal) => {
 
       return {
         percentComplete,
-        projectedPercent: percentComplete, // For lifetime goals, projected = current
         currentValue: currentProgress,
-        projectedValue: currentProgress,
         target,
         unit: goal.tracking.target?.unit || ''
       }
@@ -49,34 +44,21 @@ const calculateProjection = (goal: Goal) => {
     
     return {
       percentComplete: (completions / target) * 100,
-      projectedPercent: (completions / target) * 100,
       currentValue: completions,
-      projectedValue: completions,
       target,
       unit: 'times'
     }
   }
 
-  // Existing annual calculation logic
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
-  const endOfYear = new Date(now.getFullYear(), 11, 31)
-  
-  const daysPassed = differenceInDays(now, startOfYear)
-  const totalDays = differenceInDays(endOfYear, startOfYear)
-  const percentOfYearPassed = daysPassed / totalDays
-
+  // For non-lifetime goals
   if (goal.trackingType === 'count') {
     const currentProgress = goal.tracking.progress || 0
     const target = goal.tracking.target?.value || 0
-    const projectedValue = (currentProgress / percentOfYearPassed) || 0
     const percentComplete = (currentProgress / target) * 100
-    const projectedPercent = (projectedValue / target) * 100
 
     return {
-      percentComplete: percentComplete,
-      projectedPercent: projectedPercent,
+      percentComplete,
       currentValue: currentProgress,
-      projectedValue: Math.round(projectedValue),
       target,
       unit: goal.tracking.target?.unit || ''
     }
@@ -84,14 +66,11 @@ const calculateProjection = (goal: Goal) => {
 
   // For boolean goals, use completion dates count
   const completions = goal.tracking.completedDates?.length || 0
-  const projectedCompletions = (completions / percentOfYearPassed) || 0
   const target = goal.daysPerWeek ? goal.daysPerWeek * 52 : 365 // Default to daily if no daysPerWeek
   
   return {
     percentComplete: (completions / target) * 100,
-    projectedPercent: (projectedCompletions / target) * 100,
     currentValue: completions,
-    projectedValue: Math.round(projectedCompletions),
     target,
     unit: 'times'
   }
@@ -203,14 +182,28 @@ export default function GoalDetail() {
       
       const value = parseFloat(historicalValue)
       
-      // Add to count history directly
-      const newCountHistory = [
-        ...(goal.tracking.countHistory || []),
-        {
+      // Check if an entry for this year already exists
+      const existingEntryIndex = (goal.tracking.countHistory || [])
+        .findIndex(entry => entry.date === historicalYear)
+      
+      let newCountHistory = [...(goal.tracking.countHistory || [])]
+      
+      if (existingEntryIndex >= 0) {
+        // Update existing entry
+        newCountHistory[existingEntryIndex] = {
+          ...newCountHistory[existingEntryIndex],
+          value: value // Replace value instead of adding to it
+        }
+      } else {
+        // Add new entry
+        newCountHistory.push({
           date: historicalYear,
           value: value
-        }
-      ].sort((a, b) => a.date.localeCompare(b.date))
+        })
+      }
+      
+      // Sort the entries
+      newCountHistory = newCountHistory.sort((a, b) => a.date.localeCompare(b.date))
       
       // Calculate total progress
       const totalProgress = newCountHistory.reduce((sum, entry) => sum + entry.value, 0)
@@ -225,6 +218,7 @@ export default function GoalDetail() {
         }
       }
 
+      console.log('Updating goal with new history:', newCountHistory)
       await updateGoal(updatedGoal)
     }
     
@@ -432,105 +426,115 @@ export default function GoalDetail() {
   }
 
   const renderAnnualView = () => {
+    if (!goal) return null
+
     const {
       percentComplete,
-      projectedPercent,
       currentValue,
       target,
       unit
     } = calculateProjection(goal)
 
-    const isOverachieving = percentComplete > 100 || projectedPercent > 100
+    const isOverachieving = percentComplete > 100
     const numberFormatter = new Intl.NumberFormat('en-US')
 
     // Calculate projection message for lifetime goals
-    let projectionMessage: string | JSX.Element | null = null;
-    if (goal.timeHorizon === 'lifetime' && goal.trackingType === 'count') {
-      // Get all years from the quarterly data
-      const allDates = goal.tracking.countHistory?.map(entry => entry.date) || [];
-      const years = [...new Set(allDates.map(date => {
-        if (date.length === 4) return date;
-        if (date.includes('-20')) return date.split('-')[1];
-        return date;
-      }))].sort((a, b) => parseInt(a) - parseInt(b));
-
-      // Calculate yearly totals
-      const yearlyData = years.map(year => {
-        const yearEntries = goal.tracking.countHistory
-          ?.filter(entry => {
-            if (entry.date.length === 4) return entry.date === year;
-            if (entry.date.includes('-20')) return entry.date.split('-')[1] === year;
-            return false;
-          }) || [];
-        return yearEntries.reduce((sum, entry) => sum + entry.value, 0);
-      });
-
-      // Calculate 5-year rolling average for projection
-      const last5Years = yearlyData.slice(-5);
-      const avgPerYear = last5Years.length > 0 
-        ? last5Years.reduce((sum, val) => sum + val, 0) / last5Years.length 
-        : 0;
-
-      // Calculate remaining progress and completion year
-      const remaining = Math.max(0, target - currentValue);
-      const yearsToCompletion = avgPerYear > 0 ? Math.ceil(remaining / avgPerYear) : 0;
-      const projectedCompletionYear = new Date().getFullYear() + yearsToCompletion;
+    let projectionMessage = null
+    
+    if (goal.timeHorizon === 'lifetime') {
+      // Get historical data from countHistory
+      const historyByYear: Record<string, number> = {}
+      
+      // Group entries by year
+      goal.tracking.countHistory?.forEach(entry => {
+        // Extract year from date format
+        let year: string | undefined
+        if (entry.date.length === 4) {
+          year = entry.date
+        } else if (entry.date.includes('-')) {
+          const parts = entry.date.split('-')
+          if (parts[1]?.length === 4) year = parts[1]
+          else if (parts[0]?.length === 4) year = parts[0]
+        }
+        
+        if (year) {
+          historyByYear[year] = (historyByYear[year] || 0) + entry.value
+        }
+      })
+      
+      // Get yearly totals for the last 5 years
+      const yearlyTotals = Object.entries(historyByYear)
+        .sort((a, b) => b[0].localeCompare(a[0])) // Sort newest first
+        .slice(0, 5) // Take last 5 years
+        .map(([_, value]) => value)
+      
+      const avgPerYear = yearlyTotals.length > 0
+        ? yearlyTotals.reduce((sum, val) => sum + val, 0) / yearlyTotals.length
+        : 0
+      
+      const remainingToTarget = target - currentValue
+      const yearsToComplete = avgPerYear > 0 ? Math.ceil(remainingToTarget / avgPerYear) : 0
+      const projectedCompletionYear = new Date().getFullYear() + yearsToComplete
       
       if (currentValue >= target) {
-        projectionMessage = "🎉 Congratulations! You've already reached your goal!";
+        projectionMessage = "🎉 Congratulations! You've already reached your goal!"
       } else if (avgPerYear <= 0) {
-        projectionMessage = "Add more historical data to see a projection.";
+        projectionMessage = "Add more historical data to see a projection."
       } else {
-        const roundedAvg = Math.round(avgPerYear);
+        const roundedAvg = Math.round(avgPerYear)
+        
         projectionMessage = (
-          <span>
-            🚀 At your current pace, you'll achieve your goal in{' '}
-            <span className="text-xl font-bold text-primary inline-block animate-pulse">
-              {projectedCompletionYear}
-            </span>
-            {' '}based on your average of {roundedAvg} {unit} per year over the past {Math.min(5, last5Years.length)} years!
-          </span>
-        );
+          <div className="bg-blue-50 p-4 rounded-lg mb-4">
+            <p className="flex items-center flex-wrap">
+              <span className="mr-2">🚀</span>
+              At your current pace, you'll achieve your goal in{' '}
+              <span className="text-xl font-bold text-primary mx-1">
+                {projectedCompletionYear}
+              </span>{' '}
+              based on your average of {roundedAvg} {unit} per year over the past {Math.min(5, yearlyTotals.length)} years!
+            </p>
+          </div>
+        )
       }
     }
+
+    console.log('Goal data for projection:', {
+      countHistory: goal.tracking.countHistory,
+      progress: goal.tracking.progress
+    })
 
     return (
       <div className="space-y-6">
         <div className="mb-6">
           <h2 className="text-lg font-semibold mb-4">Progress Overview</h2>
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex-1">
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">Current</span>
-                  <span className="text-gray-600">Target</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-2xl font-bold">{numberFormatter.format(currentValue)} {unit}</span>
-                  <span className="text-2xl font-bold">{numberFormatter.format(target)} {unit}</span>
-                </div>
-                <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
-                  <div 
-                    className={`absolute h-full rounded-full ${isOverachieving ? 'bg-green-500' : 'bg-primary'}`}
-                    style={{ width: `${Math.min(percentComplete, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-sm">
-                  <div>{numberFormatter.format(Math.round(percentComplete))}% complete</div>
-                  <div className="text-gray-600">
-                    Projected: {numberFormatter.format(Math.round(projectedPercent))}%
-                    {projectedPercent > 100 && ' (Exceeding Target!)'}
-                  </div>
-                </div>
-              </div>
+          
+          {/* Projection message now appears here, above the progress bar */}
+          {projectionMessage}
+          
+          <div className="flex justify-between mb-2">
+            <div>
+              <p className="text-text-secondary">Current</p>
+              <p className="text-3xl font-bold">{numberFormatter.format(currentValue)}</p>
             </div>
-            
-            {/* Add the projection message here for lifetime goals */}
-            {projectionMessage && (
-              <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
-                {typeof projectionMessage === 'string' ? <p>{projectionMessage}</p> : projectionMessage}
-              </div>
-            )}
+            <div className="text-right">
+              <p className="text-text-secondary">Target</p>
+              <p className="text-3xl font-bold">{numberFormatter.format(target)}</p>
+            </div>
+          </div>
+          
+          <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="absolute h-full bg-primary rounded-full"
+              style={{ width: `${Math.min(percentComplete, 100)}%` }}
+            />
+          </div>
+          
+          <div className="flex justify-between mt-1">
+            <p className="text-sm text-text-secondary">{Math.round(percentComplete)}% complete</p>
+            <p className="text-sm text-text-secondary">
+              Projected: {Math.round(percentComplete)}%
+              {isOverachieving ? " (Exceeding Target)" : ""}
+            </p>
           </div>
         </div>
 
@@ -601,8 +605,7 @@ export default function GoalDetail() {
 
     return (
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Historical Data</h2>
+        <div className="flex items-center justify-end mb-4">
           <button
             onClick={() => setIsAddingHistorical(true)}
             className="btn-primary"
@@ -739,9 +742,10 @@ export default function GoalDetail() {
       .map(([year, value]) => ({ year, value: value as number }))
       .sort((a, b) => b.year.localeCompare(a.year));
 
+    console.log('Historical data:', goal.tracking.countHistory)
+
     return (
       <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-4">Historical Progress</h2>
         {yearlyData.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">

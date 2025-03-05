@@ -3,7 +3,6 @@ import { useGoals } from '../contexts/GoalContext'
 import { useCategories } from '../contexts/CategoryContext'
 import { useState, Fragment, useEffect } from 'react'
 import GoodEnoughModal from '../components/GoodEnoughModal'
-import GoalProgress from '../components/GoalProgress'
 
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
@@ -54,7 +53,6 @@ function getStatusColor(
 
     // For annual goals, we compare the year-to-date total against a pro-rated target
     const currentQuarterNum = getQuarterNumber(currentQuarter.quarter)
-    const quarterNum = getQuarterNumber(quarter)
     
     // If we're looking at a past year, use the full threshold
     let adjustedThreshold = threshold
@@ -128,7 +126,7 @@ function formatValue(value: number | undefined, unit: string | undefined): strin
 }
 
 export default function GoodEnough() {
-  const { goals, updateGoal, updateGoalProgress, syncGoalHistories, recalculateAllGoalsProgress } = useGoals()
+  const { goals, updateGoal, syncGoalHistories} = useGoals()
   const { categories } = useCategories()
   const [refreshKey, setRefreshKey] = useState(0) // Add refresh key for forcing re-renders
   
